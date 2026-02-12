@@ -108,15 +108,30 @@ def weight_function_dist(G, u_node, v, current_dist):
     return current_dist + length
 
 
+def _flatten_names(name_data):
+    """Recursively flattens edge name data into a set of strings."""
+    if name_data is None:
+        return set()
+    if isinstance(name_data, str):
+        return {name_data}
+    if isinstance(name_data, list):
+        # Flatten list recursively
+        flat = set()
+        for item in name_data:
+            flat.update(_flatten_names(item))
+        return flat
+    # Fallback for other types
+    return {str(name_data)}
+
 def _compare_edge_names(name1, name2):
     """Returns True if edge names match (continuation), False if turn."""
     if name1 is None or name2 is None:
         return False
     
-    n1 = [name1] if isinstance(name1, str) else name1
-    n2 = [name2] if isinstance(name2, str) else name2
+    n1_set = _flatten_names(name1)
+    n2_set = _flatten_names(name2)
     
-    return bool(set(n1) & set(n2))
+    return bool(n1_set & n2_set)
 
 def weight_function_turns_dist(G, u_node, v, current_turns, current_dist):
     """Calculates path weight considering turns and distance."""

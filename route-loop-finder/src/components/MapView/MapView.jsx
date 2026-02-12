@@ -42,7 +42,8 @@ function MapView({
     hoveredPoint,
     onHover,
     showPathPreview,
-    pathPreviewOpacity
+    pathPreviewOpacity,
+    showGraphBoundary
 }) {
     const [activeStyle, setActiveStyle] = useState(() => {
         try {
@@ -111,7 +112,15 @@ function MapView({
     };
 
     // Get boundary for active graph preview
-    const activeBoundary = (mode === 'input' && activeGraph && graphBoundaries)
+    // Show if:
+    // 1. In 'input' mode AND has active graph
+    // 2. In 'display' mode AND showGraphBoundary is true AND activeGraph is set
+    // 3. In 'graphCreate' mode? No, handled separately by BoundsSelector/Rectangle
+    const shouldShowBoundary =
+        (mode === 'input' && activeGraph && graphBoundaries) ||
+        (showGraphBoundary && activeGraph && graphBoundaries);
+
+    const activeBoundary = shouldShowBoundary
         ? graphBoundaries[activeGraph]
         : null;
 

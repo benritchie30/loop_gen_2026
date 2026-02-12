@@ -55,6 +55,8 @@ function ControlPanel({
     setPathPreviewOpacity,
     showCentroids,
     setShowCentroids,
+    showGraphBoundary,
+    setShowGraphBoundary,
     primaryColor,
     setPrimaryColor
 }) {
@@ -329,15 +331,33 @@ function ControlPanel({
                                         />
                                         Show Direction Arrows
                                     </label>
-                                    <label className="checkbox-item" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={showPathPreview}
-                                            onChange={e => setShowPathPreview(e.target.checked)}
-                                        />
-                                        Show Inactive Paths
-                                    </label>
+                                    <div className="control-panel__setting-row">
+                                        <label className="control-panel__setting-label">
+                                            Show Graph Boundary
+                                        </label>
+                                        <label className="switch">
+                                            <input
+                                                type="checkbox"
+                                                checked={showGraphBoundary}
+                                                onChange={(e) => setShowGraphBoundary(e.target.checked)}
+                                            />
+                                            <span className="slider round"></span>
+                                        </label>
+                                    </div>
 
+                                    <div className="control-panel__setting-row">
+                                        <label className="control-panel__setting-label">
+                                            Show Path Preview
+                                        </label>
+                                        <label className="switch">
+                                            <input
+                                                type="checkbox"
+                                                checked={showPathPreview}
+                                                onChange={(e) => setShowPathPreview(e.target.checked)}
+                                            />
+                                            <span className="slider round"></span>
+                                        </label>
+                                    </div>
                                     <label className="checkbox-item" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', marginTop: '4px' }}>
                                         <input
                                             type="checkbox"

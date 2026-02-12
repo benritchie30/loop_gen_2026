@@ -203,7 +203,7 @@ async def handle_start_generation(websocket, data):
     max_paths = data.get("num_paths", 50)
     algorithm = data.get("algorithm", "scenic")
     deduplication = data.get("deduplication", "centroid")
-    min_dist_m = float(data.get("min_dist_m", 50.0))
+    min_dist_m = float(data.get("min_dist_m") or 50.0)
     
     print(f"Starting generation: {max_paths} paths, Alg: {algorithm}, Dedup: {deduplication}, MinDist: {min_dist_m}m, Range: {min_path_len/1609.34:.1f}-{max_path_len/1609.34:.1f}mi")
 

@@ -41,7 +41,7 @@ function PathInfo({ path }) {
             </div>
 
             <div className="path-info__item">
-                <span className="path-info__label">Total Climbing</span>
+                <span className="path-info__label">Climb Distance</span>
                 <span className="path-info__value">{formatClimbing(totalClimb)}</span>
             </div>
 
