@@ -38,7 +38,9 @@ function MapView({
     pathUndoRef,
     showArrows,
     showCentroids,
-    primaryColor
+    primaryColor,
+    hoveredPoint,
+    onHover
 }) {
     const [activeStyle, setActiveStyle] = useState('light');
 
@@ -198,6 +200,8 @@ function MapView({
                         showArrows={showArrows}
                         showCentroids={showCentroids}
                         primaryColor={primaryColor}
+                        hoveredPoint={hoveredPoint}
+                        onHover={onHover}
                     />
                 )}
 

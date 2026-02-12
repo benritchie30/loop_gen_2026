@@ -9,7 +9,7 @@ const PADDING = { top: 16, right: 24, bottom: 32, left: 48 };
  * Standalone window displaying elevation profile chart.
  * Centered at the bottom of the screen with larger dimensions.
  */
-function ElevationProfileWindow({ elevationProfile, onClose }) {
+function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHover }) {
     const chartData = useMemo(() => {
         if (!elevationProfile || elevationProfile.length < 2) return null;
 
@@ -33,6 +33,7 @@ function ElevationProfileWindow({ elevationProfile, onClose }) {
 
         const scaleX = (d) => PADDING.left + ((d - minDist) / distRange) * plotW;
         const scaleY = (e) => PADDING.top + plotH - ((e - yMin) / (yMax - yMin)) * plotH;
+        const invertX = (x) => minDist + ((x - PADDING.left) / plotW) * distRange;
 
         // Build SVG path for the line
         const linePoints = elevationProfile.map(
@@ -73,9 +74,51 @@ function ElevationProfileWindow({ elevationProfile, onClose }) {
             plotH,
             bottomY,
             minElev: Math.round(minElev),
-            maxElev: Math.round(maxElev)
+            maxElev: Math.round(maxElev),
+            scaleX,
+            scaleY,
+            invertX,
+            minDist,
+            maxDist
         };
     }, [elevationProfile]);
+
+    const handleMouseMove = (e) => {
+        if (!chartData) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+
+        // Convert x to distance
+        let dist = chartData.invertX(x);
+
+        // Clamp to range
+        dist = Math.max(chartData.minDist, Math.min(dist, chartData.maxDist));
+
+        // Find closest point in profile
+        // Profile is sorted by distance
+        let closest = elevationProfile[0];
+        let minDiff = Math.abs(closest[0] - dist);
+
+        for (let i = 1; i < elevationProfile.length; i++) {
+            const diff = Math.abs(elevationProfile[i][0] - dist);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closest = elevationProfile[i];
+            }
+        }
+
+        // closest format: [dist_mi, elev_ft, lat, lng, bearing]
+        onHover({
+            distance: closest[0],
+            elevation: closest[1],
+            coordinate: [closest[2], closest[3]],
+            bearing: closest[4] // Optional
+        });
+    };
+
+    const handleMouseLeave = () => {
+        onHover(null);
+    };
 
     if (!chartData) {
         return null;
@@ -94,7 +137,9 @@ function ElevationProfileWindow({ elevationProfile, onClose }) {
                     width={CHART_WIDTH}
                     height={CHART_HEIGHT}
                     viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-                    style={{ display: 'block', width: '100%', height: 'auto' }}
+                    style={{ display: 'block', width: '100%', height: 'auto', cursor: 'crosshair' }}
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
                 >
                     <defs>
                         <linearGradient id="elevGradient" x1="0" y1="0" x2="0" y2="1">
@@ -195,6 +240,41 @@ function ElevationProfileWindow({ elevationProfile, onClose }) {
                             </text>
                         </g>
                     ))}
+
+                    {/* Hover Indicator */}
+                    {hoveredPoint && (
+                        <g>
+                            <line
+                                x1={chartData.scaleX(hoveredPoint.distance)}
+                                y1={PADDING.top}
+                                x2={chartData.scaleX(hoveredPoint.distance)}
+                                y2={chartData.bottomY}
+                                stroke="var(--color-accent)"
+                                strokeWidth="1"
+                                strokeDasharray="4,2"
+                            />
+                            <circle
+                                cx={chartData.scaleX(hoveredPoint.distance)}
+                                cy={chartData.scaleY(hoveredPoint.elevation)}
+                                r="4"
+                                fill="white"
+                                stroke="var(--color-accent)"
+                                strokeWidth="2"
+                            />
+                            <text
+                                x={Math.min(chartData.scaleX(hoveredPoint.distance) + 8, CHART_WIDTH - 60)}
+                                y={Math.max(chartData.scaleY(hoveredPoint.elevation) - 8, PADDING.top + 10)}
+                                fontSize="11"
+                                fontWeight="bold"
+                                fill="var(--color-text)"
+                                stroke="var(--bg-color)"
+                                strokeWidth="3"
+                                paintOrder="stroke"
+                            >
+                                {hoveredPoint.elevation} ft
+                            </text>
+                        </g>
+                    )}
 
                     {/* Axis labels */}
                     <text

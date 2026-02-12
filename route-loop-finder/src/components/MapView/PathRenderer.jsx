@@ -21,7 +21,9 @@ function PathRenderer({
     selectionPane = 'overlayPane',
     showArrows = true,
     showCentroids = false,
-    primaryColor = 215
+    primaryColor = 215,
+    hoveredPoint,
+    onHover
 }) {
     // Style for inactive/background paths — very subtle, matching the theme but desaturated/lighter
     const inactiveStyle = useMemo(() => ({
@@ -67,6 +69,53 @@ function PathRenderer({
         return props.type === 'exclude' ? excludeStyle : selectionStyle;
     };
 
+    // Handle mouse move on the active path
+    const onActivePathTarget = (feature, layer) => {
+        layer.on({
+            mousemove: (e) => {
+                if (!currentPath?.properties?.elevation_profile) return;
+
+                const { lat, lng } = e.latlng;
+                const profile = currentPath.properties.elevation_profile;
+
+                // Find closest point in profile to mouse position
+                // Profile items: [dist_mi, elev_ft, lat, lng, bearing]
+                // Simple Euclidean distance check on lat/lng
+                // Since profile points are dense (every ~50m), this is reasonably accurate for hover
+
+                let closest = profile[0];
+                let minSqDist = Infinity;
+
+                for (let i = 0; i < profile.length; i++) {
+                    const p = profile[i];
+                    // Skip if no coords
+                    if (p.length < 4) continue;
+
+                    const dLat = p[2] - lat;
+                    const dLng = p[3] - lng;
+                    const sqDist = dLat * dLat + dLng * dLng;
+
+                    if (sqDist < minSqDist) {
+                        minSqDist = sqDist;
+                        closest = p;
+                    }
+                }
+
+                if (closest) {
+                    onHover({
+                        distance: closest[0],
+                        elevation: closest[1],
+                        coordinate: [closest[2], closest[3]],
+                        bearing: closest[4]
+                    });
+                }
+            },
+            mouseout: () => {
+                onHover(null);
+            }
+        });
+    };
+
     return (
         <>
             {/* All filtered paths — translucent preview, bottom layer */}
@@ -90,6 +139,7 @@ function PathRenderer({
                     data={currentPath}
                     style={activeStyle}
                     pane={activePane}
+                    onEachFeature={onActivePathTarget}
                 />
             )}
 
@@ -113,6 +163,22 @@ function PathRenderer({
                         weight: 1
                     }}
                     interactive={false}
+                />
+            )}
+
+            {/* Hovered Point Marker */}
+            {hoveredPoint && hoveredPoint.coordinate && (
+                <CircleMarker
+                    center={hoveredPoint.coordinate}
+                    radius={6}
+                    pathOptions={{
+                        color: 'white',
+                        fillColor: `hsl(${primaryColor}, 70%, 50%)`,
+                        fillOpacity: 1,
+                        weight: 2
+                    }}
+                    interactive={false}
+                    pane={activePane} // Draw on top of path
                 />
             )}
 

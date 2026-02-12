@@ -49,6 +49,7 @@ function App() {
   const [activeTool, setActiveTool] = useState(null); // 'path', 'lasso', or null
   const [isExcludeMode, setIsExcludeMode] = useState(false);
   const [isElevationMinimized, setIsElevationMinimized] = useState(false);
+  const [hoveredPoint, setHoveredPoint] = useState(null);
 
   // Display Options
   const [showArrows, setShowArrows] = useState(true);
@@ -436,6 +437,8 @@ function App() {
         showArrows={showArrows}
         showCentroids={showCentroids}
         primaryColor={primaryColor}
+        hoveredPoint={hoveredPoint}
+        onHover={setHoveredPoint}
       />
 
       <ControlPanel
@@ -500,6 +503,8 @@ function App() {
             <ElevationProfileWindow
               elevationProfile={currentPath.properties.elevation_profile}
               onClose={() => setIsElevationMinimized(true)}
+              hoveredPoint={hoveredPoint}
+              onHover={setHoveredPoint}
             />
           )}
         </>
