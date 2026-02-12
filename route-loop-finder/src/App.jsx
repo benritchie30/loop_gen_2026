@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
+import { Activity } from 'lucide-react';
 import './App.css';
 
 import { MapView } from './components/MapView';
@@ -509,6 +510,7 @@ function App() {
               onClick={() => setIsElevationMinimized(false)}
             >
               Show Elevation Profile
+              <Activity size={16} />
             </button>
           )}
 

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Minimize2, ArrowLeftRight } from 'lucide-react';
 import './ElevationProfileWindow.css';
 
 const CHART_WIDTH = 800;
@@ -135,14 +136,15 @@ function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHov
                             onClick={onFlipPath}
                             title="Flip Path Direction"
                         >
-                            Flip Direction
+                            <ArrowLeftRight size={16} />
+                            Reverse Path
                         </button>
                         <button
                             className="elevation-window__close"
                             onClick={onClose}
                             title="Minimize"
                         >
-                            ×
+                            <Minimize2 size={18} />
                         </button>
                     </div>
                 </div>

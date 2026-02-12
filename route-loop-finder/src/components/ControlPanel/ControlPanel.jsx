@@ -75,7 +75,30 @@ function ControlPanel({
             {/* Header with navigation - only show in display mode */}
             {mode === 'display' && (
                 <div className="control-panel__header">
-                    <div className="control-panel__nav">
+                    <div className="control-panel__header-top">
+                        <div className="control-panel__counter">
+                            {filteredPathsCount > 0 ? (
+                                <>
+                                    <strong>{currentPathIndex + 1}</strong> / {filteredPathsCount}
+                                    {filteredPathsCount !== totalPathsCount && (
+                                        <span> ({totalPathsCount})</span>
+                                    )}
+                                </>
+                            ) : (
+                                <span>No paths</span>
+                            )}
+                        </div>
+                        <button
+                            className="control-panel__nav-btn"
+                            onClick={() => setIsMinimized(!isMinimized)}
+                            title={isMinimized ? "Maximize" : "Minimize"}
+                            style={{ marginLeft: 'auto' }}
+                        >
+                            {isMinimized ? <Maximize2 size={18} /> : <Minimize2 size={18} />}
+                        </button>
+                    </div>
+
+                    <div className="control-panel__nav-row">
                         <button
                             className="control-panel__nav-btn"
                             onClick={onGoToFirst}
@@ -133,27 +156,6 @@ function ControlPanel({
                             <ChevronsRight size={18} />
                         </button>
                     </div>
-
-                    <div className="control-panel__counter">
-                        {filteredPathsCount > 0 ? (
-                            <>
-                                <strong>{currentPathIndex + 1}</strong> / {filteredPathsCount}
-                                {filteredPathsCount !== totalPathsCount && (
-                                    <span> ({totalPathsCount})</span>
-                                )}
-                            </>
-                        ) : (
-                            <span>No paths</span>
-                        )}
-                    </div>
-                    <button
-                        className="control-panel__nav-btn"
-                        onClick={() => setIsMinimized(!isMinimized)}
-                        title={isMinimized ? "Maximize" : "Minimize"}
-                        style={{ marginLeft: '8px' }}
-                    >
-                        {isMinimized ? <Maximize2 size={18} /> : <Minimize2 size={18} />}
-                    </button>
                 </div>
             )}
 
