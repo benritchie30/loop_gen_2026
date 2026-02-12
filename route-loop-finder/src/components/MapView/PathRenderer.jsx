@@ -18,7 +18,9 @@ function PathRenderer({
     drawnSelections,
     backgroundPane = 'overlayPane',
     activePane = 'overlayPane',
-    selectionPane = 'overlayPane'
+    selectionPane = 'overlayPane',
+    showArrows = true,
+    showCentroids = false
 }) {
     // Style for inactive/background paths — very subtle so they don't clash when stacking
     const inactiveStyle = useMemo(() => ({
@@ -87,14 +89,14 @@ function PathRenderer({
             )}
 
             {/* Direction arrows along the active path */}
-            {currentPath?.properties?.elevation_profile?.length > 1 && (
+            {showArrows && currentPath?.properties?.elevation_profile?.length > 1 && (
                 <DirectionArrows
                     elevationProfile={currentPath.properties.elevation_profile}
                 />
             )}
 
             {/* Centroid marker (for spatial sort verification) */}
-            {currentPath?.properties?.centroid && (
+            {showCentroids && currentPath?.properties?.centroid && (
                 <CircleMarker
                     center={currentPath.properties.centroid}
                     radius={4}

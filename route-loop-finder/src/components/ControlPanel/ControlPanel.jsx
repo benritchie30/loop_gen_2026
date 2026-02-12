@@ -41,7 +41,11 @@ function ControlPanel({
     isCreatingGraph,
     graphCreateMode,
     setGraphCreateMode,
-    graphBounds
+    graphBounds,
+    showArrows,
+    setShowArrows,
+    showCentroids,
+    setShowCentroids
 }) {
     const canGoPrev = currentPathIndex > 0;
     const canGoNext = currentPathIndex < filteredPathsCount - 1;
@@ -117,7 +121,7 @@ function ControlPanel({
                         <div className="control-panel__section-title">Generation Settings</div>
                         <div className="settings-grid">
                             <label className="setting-item">
-                                <span>Min Miles</span>
+                                <span>Min Path Distance</span>
                                 <input
                                     type="number"
                                     name="min_path_len"
@@ -127,7 +131,7 @@ function ControlPanel({
                                 />
                             </label>
                             <label className="setting-item">
-                                <span>Max Miles</span>
+                                <span>Max Path Distance</span>
                                 <input
                                     type="number"
                                     name="max_path_len"
@@ -137,7 +141,7 @@ function ControlPanel({
                                 />
                             </label>
                             <label className="setting-item">
-                                <span>Ratio</span>
+                                <span>Loop Path Percentage</span>
                                 <input
                                     type="number"
                                     name="loop_ratio"
@@ -147,17 +151,7 @@ function ControlPanel({
                                 />
                             </label>
                             <label className="setting-item">
-                                <span>path_sim</span>
-                                <input
-                                    type="number"
-                                    name="sim_ceiling"
-                                    value={genSettings.sim_ceiling}
-                                    onChange={handleSettingChange}
-                                    step="0.1" min="0" max="1"
-                                />
-                            </label>
-                            <label className="setting-item">
-                                <span>Count</span>
+                                <span>Number of Paths</span>
                                 <input
                                     type="number"
                                     name="num_paths"
@@ -178,9 +172,22 @@ function ControlPanel({
                                     <option value="jaccard">Jaccard (Overlap)</option>
                                 </select>
                             </label>
-                            {genSettings.deduplication === 'centroid' && (
+
+                            {/* Conditional Input based on Dedup selection */}
+                            {genSettings.deduplication === 'jaccard' ? (
                                 <label className="setting-item full-width">
-                                    <span>Dist (m)</span>
+                                    <span>Path Similarity</span>
+                                    <input
+                                        type="number"
+                                        name="sim_ceiling"
+                                        value={genSettings.sim_ceiling}
+                                        onChange={handleSettingChange}
+                                        step="0.1" min="0" max="1"
+                                    />
+                                </label>
+                            ) : (
+                                <label className="setting-item full-width">
+                                    <span>Centroid Sensitivity</span>
                                     <input
                                         type="number"
                                         name="min_dist_m"
@@ -235,6 +242,28 @@ function ControlPanel({
                 {hasActivePathSet && (
                     <>
                         <div className="control-panel__section">
+                            <div className="control-panel__section-title">View Options</div>
+                            <div className="settings-grid">
+                                <label className="checkbox-item" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showArrows}
+                                        onChange={e => setShowArrows(e.target.checked)}
+                                    />
+                                    Show Direction Arrows
+                                </label>
+                                <label className="checkbox-item" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showCentroids}
+                                        onChange={e => setShowCentroids(e.target.checked)}
+                                    />
+                                    Show Centroids
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="control-panel__section">
                             <div className="control-panel__section-title">Sort By</div>
                             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                                 <select
@@ -245,9 +274,9 @@ function ControlPanel({
                                 >
                                     <option value="total_miles">Distance</option>
                                     <option value="difficulty">Difficulty</option>
-                                    <option value="total_climb_ft">Climbing</option>
-                                    <option value="loop_ratio">Loop Ratio</option>
-                                    <option value="turns">Turns</option>
+                                    <option value="total_climb_ft">Total Climbing Distance</option>
+                                    <option value="loop_ratio">Loop Path Percentage</option>
+                                    <option value="turns">Number of Turns</option>
                                     <option value="spatial">Spatial Flow</option>
                                 </select>
                                 <button

@@ -35,7 +35,9 @@ function MapView({
     graphCreateMode,
     graphBoundaries,
     activeGraph,
-    pathUndoRef
+    pathUndoRef,
+    showArrows,
+    showCentroids
 }) {
     const [activeStyle, setActiveStyle] = useState('light');
 
@@ -192,6 +194,8 @@ function MapView({
                         backgroundPane="backgroundPaths"
                         activePane="activePath"
                         selectionPane="tools"
+                        showArrows={showArrows}
+                        showCentroids={showCentroids}
                     />
                 )}
 

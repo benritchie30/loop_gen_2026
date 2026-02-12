@@ -50,6 +50,10 @@ function App() {
   const [isExcludeMode, setIsExcludeMode] = useState(false);
   const [showElevationWindow, setShowElevationWindow] = useState(false);
 
+  // Display Options
+  const [showArrows, setShowArrows] = useState(true);
+  const [showCentroids, setShowCentroids] = useState(false);
+
   // Graph management state
   const [graphs, setGraphs] = useState([]);
   const [activeGraph, setActiveGraph] = useState(null);
@@ -408,6 +412,8 @@ function App() {
         graphBoundaries={graphBoundaries}
         activeGraph={activeGraph}
         pathUndoRef={pathUndoRef}
+        showArrows={showArrows}
+        showCentroids={showCentroids}
       />
 
       <ControlPanel
@@ -443,6 +449,10 @@ function App() {
         graphCreateMode={graphCreateMode}
         setGraphCreateMode={setGraphCreateMode}
         graphBounds={graphBounds}
+        showArrows={showArrows}
+        setShowArrows={setShowArrows}
+        showCentroids={showCentroids}
+        setShowCentroids={setShowCentroids}
       />
 
       {showElevationWindow && currentPath?.properties?.elevation_profile?.length > 1 && (
