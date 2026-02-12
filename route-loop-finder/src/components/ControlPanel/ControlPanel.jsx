@@ -46,6 +46,10 @@ function ControlPanel({
     graphBounds,
     showArrows,
     setShowArrows,
+    showPathPreview,
+    setShowPathPreview,
+    pathPreviewOpacity,
+    setPathPreviewOpacity,
     showCentroids,
     setShowCentroids,
     primaryColor,
@@ -269,11 +273,34 @@ function ControlPanel({
                                     <label className="checkbox-item" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
                                         <input
                                             type="checkbox"
+                                            checked={showPathPreview}
+                                            onChange={e => setShowPathPreview(e.target.checked)}
+                                        />
+                                        Show Inactive Paths
+                                    </label>
+
+                                    <label className="checkbox-item" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', marginTop: '4px' }}>
+                                        <input
+                                            type="checkbox"
                                             checked={showCentroids}
                                             onChange={e => setShowCentroids(e.target.checked)}
                                         />
                                         Show Centroids
                                     </label>
+                                    {showPathPreview && (
+                                        <label className="setting-item full-width" style={{ marginTop: '8px' }}>
+                                            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Preview Opacity: {Math.round(pathPreviewOpacity * 100)}%</span>
+                                            <input
+                                                type="range"
+                                                min="0.1"
+                                                max="1.0"
+                                                step="0.1"
+                                                value={pathPreviewOpacity}
+                                                onChange={e => setPathPreviewOpacity(parseFloat(e.target.value))}
+                                                style={{ width: '100%' }}
+                                            />
+                                        </label>
+                                    )}
                                 </div>
                             </div>
 

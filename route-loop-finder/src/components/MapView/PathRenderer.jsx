@@ -23,14 +23,16 @@ function PathRenderer({
     showCentroids = false,
     primaryColor = 215,
     hoveredPoint,
-    onHover
+    onHover,
+    showPathPreview = true,
+    pathPreviewOpacity = 0.4
 }) {
     // Style for inactive/background paths — very subtle, matching the theme but desaturated/lighter
     const inactiveStyle = useMemo(() => ({
         weight: 2,
         color: `hsl(${primaryColor}, 40%, 65%)`, // Muted version of theme color
-        opacity: 0.4
-    }), [primaryColor]);
+        opacity: pathPreviewOpacity
+    }), [primaryColor, pathPreviewOpacity]);
 
     // Style for the currently selected path — bold, using theme color
     const activeStyle = useMemo(() => ({
@@ -40,8 +42,12 @@ function PathRenderer({
     }), [primaryColor]);
 
     // Derived colors for elements
-    const arrowColor = `hsl(${primaryColor}, 70%, 50%)`; // Bright theme color for arrows
-    const centroidColor = `hsl(${primaryColor}, 80%, 45%)`; // Slightly different shade for centroid
+    // Secondary color: Brighter/Lighter/More saturated for better visibility against dark path
+    const secondaryColor = `hsl(${primaryColor}, 85%, 60%)`;
+
+    // Use secondary color for arrows and centroids
+    const arrowColor = secondaryColor;
+    const centroidColor = secondaryColor;
 
     // Style for drawn selection highlights — bright orange, wide, on top
     const selectionStyle = useMemo(() => ({
@@ -119,7 +125,7 @@ function PathRenderer({
     return (
         <>
             {/* All filtered paths — translucent preview, bottom layer */}
-            {filteredPaths?.map((path, index) => {
+            {showPathPreview && filteredPaths?.map((path, index) => {
                 if (path === currentPath) return null;
 
                 return (
@@ -170,10 +176,10 @@ function PathRenderer({
             {hoveredPoint && hoveredPoint.coordinate && (
                 <CircleMarker
                     center={hoveredPoint.coordinate}
-                    radius={6}
+                    radius={9} // Increased size
                     pathOptions={{
                         color: 'white',
-                        fillColor: `hsl(${primaryColor}, 70%, 50%)`,
+                        fillColor: secondaryColor, // Use secondary color
                         fillOpacity: 1,
                         weight: 2
                     }}

@@ -40,7 +40,9 @@ function MapView({
     showCentroids,
     primaryColor,
     hoveredPoint,
-    onHover
+    onHover,
+    showPathPreview,
+    pathPreviewOpacity
 }) {
     const [activeStyle, setActiveStyle] = useState('light');
 
@@ -202,6 +204,8 @@ function MapView({
                         primaryColor={primaryColor}
                         hoveredPoint={hoveredPoint}
                         onHover={onHover}
+                        showPathPreview={showPathPreview}
+                        pathPreviewOpacity={pathPreviewOpacity}
                     />
                 )}
 

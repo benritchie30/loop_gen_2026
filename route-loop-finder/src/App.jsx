@@ -57,6 +57,8 @@ function App() {
   const [showArrows, setShowArrows] = useState(true);
   const [showCentroids, setShowCentroids] = useState(false);
   const [primaryColor, setPrimaryColor] = useState(215); // Default hue (Blue)
+  const [showPathPreview, setShowPathPreview] = useState(true);
+  const [pathPreviewOpacity, setPathPreviewOpacity] = useState(0.4);
 
   // Update CSS variables when primary color changes
   useEffect(() => {
@@ -441,6 +443,8 @@ function App() {
         primaryColor={primaryColor}
         hoveredPoint={hoveredPoint}
         onHover={setHoveredPoint}
+        showPathPreview={showPathPreview}
+        pathPreviewOpacity={pathPreviewOpacity}
       />
 
       <ControlPanel
@@ -478,6 +482,10 @@ function App() {
         graphBounds={graphBounds}
         showArrows={showArrows}
         setShowArrows={setShowArrows}
+        showPathPreview={showPathPreview}
+        setShowPathPreview={setShowPathPreview}
+        pathPreviewOpacity={pathPreviewOpacity}
+        setPathPreviewOpacity={setPathPreviewOpacity}
         showCentroids={showCentroids}
         setShowCentroids={setShowCentroids}
 
