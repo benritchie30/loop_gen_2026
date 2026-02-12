@@ -50,18 +50,7 @@ export default function GraphSelector({
                 </div>
 
                 <div className="graph-create-status">
-                    {graphBounds ? (
-                        <div className="status-message success">
-                            <span>Ready! Press <strong>Enter</strong> to create.</span>
-                        </div>
-                    ) : (
-                        <div className="status-message">
-                            <span>Draw region on map...</span>
-                        </div>
-                    )}
-                    <div className="status-hint">
-                        (Esc to cancel)
-                    </div>
+                    {/* Status removed as requested */}
                 </div>
             </div>
         );

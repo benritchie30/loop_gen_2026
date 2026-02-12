@@ -53,6 +53,18 @@ function App() {
   // Display Options
   const [showArrows, setShowArrows] = useState(true);
   const [showCentroids, setShowCentroids] = useState(false);
+  const [primaryColor, setPrimaryColor] = useState(215); // Default hue (Blue)
+
+  // Update CSS variables when primary color changes
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--color-primary', `hsl(${primaryColor}, 65%, 50%)`);
+    root.style.setProperty('--color-primary-light', `hsl(${primaryColor}, 65%, 90%)`);
+    root.style.setProperty('--color-primary-dark', `hsl(${primaryColor}, 65%, 40%)`);
+    root.style.setProperty('--color-accent', `hsl(${primaryColor}, 70%, 60%)`);
+    root.style.setProperty('--path-active', `hsl(${primaryColor}, 65%, 30%)`); // Darker for path
+    root.style.setProperty('--marker-pending', `hsl(${primaryColor}, 65%, 50%)`);
+  }, [primaryColor]);
 
   // Graph management state
   const [graphs, setGraphs] = useState([]);
@@ -300,6 +312,15 @@ function App() {
         setMode('input');
       }
 
+      // Graph Create Mode: Z to undo last polygon point
+      if ((e.key === 'z' || e.key === 'Z') && mode === 'graphCreate' && graphBounds?.type === 'polygon') {
+        const coords = graphBounds.coordinates;
+        if (coords && coords.length > 0) {
+          const newCoords = coords.slice(0, -1);
+          setGraphBounds({ ...graphBounds, coordinates: newCoords });
+        }
+      }
+
       // Display Mode Shortcuts
       if (mode === 'display') {
         // Backspace: Return to Input Mode
@@ -414,6 +435,7 @@ function App() {
         pathUndoRef={pathUndoRef}
         showArrows={showArrows}
         showCentroids={showCentroids}
+        primaryColor={primaryColor}
       />
 
       <ControlPanel
@@ -453,6 +475,8 @@ function App() {
         setShowArrows={setShowArrows}
         showCentroids={showCentroids}
         setShowCentroids={setShowCentroids}
+        primaryColor={primaryColor}
+        setPrimaryColor={setPrimaryColor}
       />
 
       {showElevationWindow && currentPath?.properties?.elevation_profile?.length > 1 && (

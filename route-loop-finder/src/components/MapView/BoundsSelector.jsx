@@ -130,7 +130,7 @@ function BoxSelector({ bounds, onBoundsChange }) {
                     color: '#2196F3',
                     weight: 3,
                     fillColor: '#2196F3',
-                    fillOpacity: 0.08,
+                    fillOpacity: 0.15,
                     dashArray: '8, 6'
                 }}
             />
@@ -187,7 +187,7 @@ function CircleSelector({ bounds, onBoundsChange }) {
                     color: '#2196F3',
                     weight: 3,
                     fillColor: '#2196F3',
-                    fillOpacity: 0.08,
+                    fillOpacity: 0.15,
                     dashArray: '8, 6'
                 }}
             />

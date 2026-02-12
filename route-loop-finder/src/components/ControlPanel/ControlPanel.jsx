@@ -5,6 +5,7 @@ import PathInfo from './PathInfo';
 import DistanceFilter from './DistanceFilter';
 import DifficultyFilter from './DifficultyFilter';
 import GraphSelector from './GraphSelector';
+import ThemeSettings from './ThemeSettings';
 
 /**
  * Floating control panel for path navigation, filtering, and mode switching.
@@ -45,7 +46,9 @@ function ControlPanel({
     showArrows,
     setShowArrows,
     showCentroids,
-    setShowCentroids
+    setShowCentroids,
+    primaryColor,
+    setPrimaryColor
 }) {
     const canGoPrev = currentPathIndex > 0;
     const canGoNext = currentPathIndex < filteredPathsCount - 1;
@@ -321,6 +324,12 @@ function ControlPanel({
                         </div>
                     </div>
                 ) : null}
+
+                {/* Theme Settings */}
+                <ThemeSettings
+                    primaryColor={primaryColor}
+                    setPrimaryColor={setPrimaryColor}
+                />
             </div>
         </div>
     );

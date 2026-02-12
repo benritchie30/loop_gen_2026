@@ -7,13 +7,13 @@ import L from 'leaflet';
  * bearingDeg is geographic (0=north, 90=east).
  * The SVG arrow points east (right) by default, so we subtract 90° for CSS rotation.
  */
-function createArrowIcon(bearingDeg) {
+function createArrowIcon(bearingDeg, color) {
     const cssRotation = bearingDeg - 90;
     return L.divIcon({
         className: 'direction-arrow',
         html: `<div class="direction-arrow__inner" style="transform: rotate(${cssRotation}deg)">
             <svg viewBox="0 0 24 24" width="22" height="22">
-                <path d="M4 12 L18 12 M18 12 L12 6 M18 12 L12 18" stroke="#e63946" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M4 12 L18 12 M18 12 L12 6 M18 12 L12 18" stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
             </svg>
         </div>`,
         iconSize: [22, 22],
@@ -27,7 +27,7 @@ function createArrowIcon(bearingDeg) {
  * Bearing is pre-computed in the backend from the actual edge geometry.
  * Places an arrow every `intervalMiles` miles along the path.
  */
-function DirectionArrows({ elevationProfile, intervalMiles = 1 }) {
+function DirectionArrows({ elevationProfile, intervalMiles = 1, color = '#e63946' }) {
     const arrows = useMemo(() => {
         if (!elevationProfile || elevationProfile.length < 2) return [];
 
@@ -58,7 +58,7 @@ function DirectionArrows({ elevationProfile, intervalMiles = 1 }) {
                 <Marker
                     key={key}
                     position={[lat, lng]}
-                    icon={createArrowIcon(bearing)}
+                    icon={createArrowIcon(bearing, color)}
                     interactive={false}
                 />
             ))}

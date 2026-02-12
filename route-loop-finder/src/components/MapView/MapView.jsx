@@ -37,7 +37,8 @@ function MapView({
     activeGraph,
     pathUndoRef,
     showArrows,
-    showCentroids
+    showCentroids,
+    primaryColor
 }) {
     const [activeStyle, setActiveStyle] = useState('light');
 
@@ -196,6 +197,7 @@ function MapView({
                         selectionPane="tools"
                         showArrows={showArrows}
                         showCentroids={showCentroids}
+                        primaryColor={primaryColor}
                     />
                 )}
 

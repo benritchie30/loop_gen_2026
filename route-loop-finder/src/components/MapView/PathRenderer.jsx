@@ -20,21 +20,26 @@ function PathRenderer({
     activePane = 'overlayPane',
     selectionPane = 'overlayPane',
     showArrows = true,
-    showCentroids = false
+    showCentroids = false,
+    primaryColor = 215
 }) {
-    // Style for inactive/background paths — very subtle so they don't clash when stacking
+    // Style for inactive/background paths — very subtle, matching the theme but desaturated/lighter
     const inactiveStyle = useMemo(() => ({
         weight: 2,
-        color: '#7a99be',
+        color: `hsl(${primaryColor}, 40%, 65%)`, // Muted version of theme color
         opacity: 0.4
-    }), []);
+    }), [primaryColor]);
 
-    // Style for the currently selected path — bold dark navy, slightly transparent
+    // Style for the currently selected path — bold, using theme color
     const activeStyle = useMemo(() => ({
         weight: 4,
-        color: '#1e3a5f',
+        color: `hsl(${primaryColor}, 65%, 30%)`, // Darker version for high contrast
         opacity: 0.85
-    }), []);
+    }), [primaryColor]);
+
+    // Derived colors for elements
+    const arrowColor = `hsl(${primaryColor}, 70%, 50%)`; // Bright theme color for arrows
+    const centroidColor = `hsl(${primaryColor}, 80%, 45%)`; // Slightly different shade for centroid
 
     // Style for drawn selection highlights — bright orange, wide, on top
     const selectionStyle = useMemo(() => ({
@@ -92,6 +97,7 @@ function PathRenderer({
             {showArrows && currentPath?.properties?.elevation_profile?.length > 1 && (
                 <DirectionArrows
                     elevationProfile={currentPath.properties.elevation_profile}
+                    color={arrowColor}
                 />
             )}
 
@@ -100,7 +106,12 @@ function PathRenderer({
                 <CircleMarker
                     center={currentPath.properties.centroid}
                     radius={4}
-                    pathOptions={{ color: 'red', fillColor: '#f00', fillOpacity: 0.8, weight: 1 }}
+                    pathOptions={{
+                        color: centroidColor,
+                        fillColor: centroidColor,
+                        fillOpacity: 0.8,
+                        weight: 1
+                    }}
                     interactive={false}
                 />
             )}
