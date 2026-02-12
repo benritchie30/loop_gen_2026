@@ -44,7 +44,22 @@ function MapView({
     showPathPreview,
     pathPreviewOpacity
 }) {
-    const [activeStyle, setActiveStyle] = useState('light');
+    const [activeStyle, setActiveStyle] = useState(() => {
+        try {
+            return localStorage.getItem('mapStyle') || 'google';
+        } catch (e) {
+            return 'google';
+        }
+    });
+
+    const handleStyleChange = (newStyle) => {
+        setActiveStyle(newStyle);
+        try {
+            localStorage.setItem('mapStyle', newStyle);
+        } catch (e) {
+            console.warn('Failed to save map style');
+        }
+    };
 
     const getSavedPosition = () => {
         try {
@@ -125,7 +140,7 @@ function MapView({
             {/* Tile Switcher */}
             <MapTileSwitcher
                 currentStyle={activeStyle}
-                onStyleChange={setActiveStyle}
+                onStyleChange={handleStyleChange}
             />
 
             {/* Instruction hint */}
