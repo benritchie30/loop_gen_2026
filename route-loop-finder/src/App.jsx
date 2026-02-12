@@ -48,7 +48,7 @@ function App() {
   // Local state for tools
   const [activeTool, setActiveTool] = useState(null); // 'path', 'lasso', or null
   const [isExcludeMode, setIsExcludeMode] = useState(false);
-  const [showElevationWindow, setShowElevationWindow] = useState(false);
+  const [isElevationMinimized, setIsElevationMinimized] = useState(false);
 
   // Display Options
   const [showArrows, setShowArrows] = useState(true);
@@ -343,7 +343,7 @@ function App() {
 
         // 'e' key: Toggle elevation window
         if (e.key === 'e' || e.key === 'E') {
-          setShowElevationWindow(prev => !prev);
+          setIsElevationMinimized(prev => !prev);
         }
 
         // p: path tool
@@ -393,15 +393,15 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [mode, pendingMarker, sendMessage, clearPendingMarker, selectPathSet, setMode, undoLastSelection, genSettings, graphBounds, isCreatingGraph, nextPath, prevPath, activeTool, setActiveTool, setIsExcludeMode, setShowElevationWindow, pathUndoRef, graphCreateMode]);
+  }, [mode, pendingMarker, sendMessage, clearPendingMarker, selectPathSet, setMode, undoLastSelection, genSettings, graphBounds, isCreatingGraph, nextPath, prevPath, activeTool, setActiveTool, setIsExcludeMode, setIsElevationMinimized, pathUndoRef, graphCreateMode]);
 
   // Auto-show elevation window when path with elevation data is selected
+  // Auto-show elevation window when path with elevation data is selected
   useEffect(() => {
-    if (currentPath?.properties?.elevation_profile?.length > 1) {
-      setShowElevationWindow(true);
-    } else {
-      setShowElevationWindow(false);
-    }
+    // If we have a path with elevation data, ensure we are not in minimized state unless user explicitly minimized
+    // But since we want persistent minimization, we actually don't want to force it open every time the path changes
+    // if the user minimized it.
+    // So we just don't do anything here. The window shows if !isElevationMinimized and data exists.
   }, [currentPath]);
 
   // Reset graph bounds when switching between box/polygon mode
@@ -475,15 +475,34 @@ function App() {
         setShowArrows={setShowArrows}
         showCentroids={showCentroids}
         setShowCentroids={setShowCentroids}
+
         primaryColor={primaryColor}
         setPrimaryColor={setPrimaryColor}
       />
 
-      {showElevationWindow && currentPath?.properties?.elevation_profile?.length > 1 && (
-        <ElevationProfileWindow
-          elevationProfile={currentPath.properties.elevation_profile}
-          onClose={() => setShowElevationWindow(false)}
-        />
+      {/* Elevation Window & Toggle */}
+      {currentPath?.properties?.elevation_profile?.length > 1 && (
+        <>
+          {/* Minimized toggle button */}
+          {isElevationMinimized && (
+            <button
+              className="elevation-toggle-btn"
+              onClick={() => setIsElevationMinimized(false)}
+            >
+              Show Elevation Profile
+            </button>
+          )}
+
+          {/* Key listener for Toggle is already in handleKeyDown ('e') */}
+
+          {/* Main Window */}
+          {!isElevationMinimized && (
+            <ElevationProfileWindow
+              elevationProfile={currentPath.properties.elevation_profile}
+              onClose={() => setIsElevationMinimized(true)}
+            />
+          )}
+        </>
       )}
     </div>
   );

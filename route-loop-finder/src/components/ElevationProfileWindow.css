@@ -61,3 +61,30 @@
     background: var(--color-surface);
     color: var(--color-text);
 }
+
+/* Elevation Toggle Button */
+.elevation-toggle-btn {
+    position: fixed;
+    bottom: var(--space-md);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-md);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.elevation-toggle-btn:hover {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
