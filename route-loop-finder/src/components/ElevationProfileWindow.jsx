@@ -9,7 +9,7 @@ const PADDING = { top: 16, right: 24, bottom: 32, left: 48 };
  * Standalone window displaying elevation profile chart.
  * Centered at the bottom of the screen with larger dimensions.
  */
-function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHover }) {
+function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHover, onFlipPath }) {
     const chartData = useMemo(() => {
         if (!elevationProfile || elevationProfile.length < 2) return null;
 
@@ -129,9 +129,22 @@ function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHov
             <div className="elevation-window__content">
                 <div className="elevation-window__header">
                     <h3>Elevation Profile</h3>
-                    <button className="elevation-window__close" onClick={onClose}>
-                        ×
-                    </button>
+                    <div className="elevation-window__controls">
+                        <button
+                            className="elevation-window__flip-btn"
+                            onClick={onFlipPath}
+                            title="Flip Path Direction"
+                        >
+                            Flip Direction
+                        </button>
+                        <button
+                            className="elevation-window__close"
+                            onClick={onClose}
+                            title="Minimize"
+                        >
+                            ×
+                        </button>
+                    </div>
                 </div>
                 <svg
                     width={CHART_WIDTH}

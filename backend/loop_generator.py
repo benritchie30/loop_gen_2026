@@ -449,7 +449,6 @@ def find_paths_turns_dist(
             centroid = None
             out_back_section = loop_start.traverse() 
             path = out_back_section + path_segment + out_back_section[::-1] 
-            print(path)
             # print(f"Path: {path}")
             if deduplication == 'centroid':
                 centroid = _calculate_path_centroid(G, path)

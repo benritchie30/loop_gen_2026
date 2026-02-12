@@ -34,6 +34,8 @@ function App() {
     setSortAscending,
     nextPath,
     prevPath,
+    goToPath,
+    reverseCurrentPathProfile,
     undoLastSelection
   } = usePathSets();
 
@@ -499,14 +501,13 @@ function App() {
           {/* Key listener for Toggle is already in handleKeyDown ('e') */}
 
           {/* Main Window */}
-          {!isElevationMinimized && (
-            <ElevationProfileWindow
-              elevationProfile={currentPath.properties.elevation_profile}
-              onClose={() => setIsElevationMinimized(true)}
-              hoveredPoint={hoveredPoint}
-              onHover={setHoveredPoint}
-            />
-          )}
+          {!isElevationMinimized && <ElevationProfileWindow
+            elevationProfile={currentPath.properties.elevation_profile}
+            onClose={() => setIsElevationMinimized(true)}
+            hoveredPoint={hoveredPoint}
+            onHover={setHoveredPoint}
+            onFlipPath={reverseCurrentPathProfile}
+          />}
         </>
       )}
     </div>

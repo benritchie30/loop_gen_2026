@@ -211,6 +211,57 @@ export function usePathSets() {
         }));
     }, [pathSets, activePathSetId]);
 
+    const reverseCurrentPathProfile = useCallback(() => {
+        if (!activePathSetId || !currentPath) return;
+
+        setPathSets(prev => {
+            const pathSet = prev[activePathSetId];
+            if (!pathSet) return prev;
+
+            const paths = [...pathSet.paths];
+            // Find the index of the path in the source array
+            // Note: currentPath is from filteredPaths, so we need to find it in the main list
+            // However, paths objects are references, so we can find index by reference
+            const pathIndex = paths.indexOf(currentPath);
+
+            if (pathIndex === -1) return prev;
+
+            const originalProfile = currentPath.properties.elevation_profile;
+            if (!originalProfile || originalProfile.length < 2) return prev;
+
+            const totalDist = originalProfile[originalProfile.length - 1][0];
+
+            // Create new reversed profile
+            // Profile item: [dist_mi, elev_ft, lat, lng, bearing]
+            const reversedProfile = originalProfile.map(p => [
+                Number((totalDist - p[0]).toFixed(3)), // New distance
+                p[1],                                  // Elevation
+                p[2],                                  // Lat
+                p[3],                                  // Lng
+                (p[4] + 180) % 360                     // New Bearing
+            ]).reverse();
+
+            // Create new path object with updated profile
+            const newPath = {
+                ...currentPath,
+                properties: {
+                    ...currentPath.properties,
+                    elevation_profile: reversedProfile
+                }
+            };
+
+            paths[pathIndex] = newPath;
+
+            return {
+                ...prev,
+                [activePathSetId]: {
+                    ...pathSet,
+                    paths: paths
+                }
+            };
+        });
+    }, [activePathSetId, currentPath]);
+
     return {
         // State
         pathSets,
@@ -240,6 +291,7 @@ export function usePathSets() {
         setSortAscending,
         nextPath,
         prevPath,
-        goToPath
+        goToPath,
+        reverseCurrentPathProfile
     };
 }
