@@ -149,3 +149,107 @@
     justify-content: center;
     filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.9));
 }
+
+/* Map Tile Switcher */
+.map-tile-switcher {
+    position: absolute;
+    top: var(--space-md);
+    right: var(--space-md);
+    z-index: 1000;
+}
+
+.map-tile-switcher__button {
+    width: 40px;
+    height: 40px;
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--color-text);
+    transition: background-color var(--transition-fast);
+}
+
+.map-tile-switcher__button:hover {
+    background-color: var(--color-bg-hover);
+}
+
+.map-tile-switcher__menu {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    padding: var(--space-xs);
+    width: 200px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.map-tile-switcher__menu::before {
+    content: '';
+    position: absolute;
+    top: -20px;
+    left: 0;
+    width: 100%;
+    height: 20px;
+}
+
+.map-tile-switcher__option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast);
+}
+
+.map-tile-switcher__option:hover {
+    background-color: var(--color-bg-hover);
+}
+
+.map-tile-switcher__option.active {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    font-weight: var(--font-weight-medium);
+}
+
+.map-tile-switcher__preview {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+}
+
+.map-tile-switcher__preview--light {
+    background: #f0f0f0;
+}
+
+.map-tile-switcher__preview--dark {
+    background: #222;
+}
+
+.map-tile-switcher__preview--street {
+    background: #e0e0e0;
+    background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%);
+    background-size: 8px 8px;
+}
+
+.map-tile-switcher__preview--satellite {
+    background: #388e3c;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

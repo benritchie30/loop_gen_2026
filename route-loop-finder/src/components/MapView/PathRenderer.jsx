@@ -12,7 +12,14 @@ import DirectionArrows from './DirectionArrows';
  * 
  * Render order ensures active path is always visible above others.
  */
-function PathRenderer({ currentPath, filteredPaths, drawnSelections }) {
+function PathRenderer({
+    currentPath,
+    filteredPaths,
+    drawnSelections,
+    backgroundPane = 'overlayPane',
+    activePane = 'overlayPane',
+    selectionPane = 'overlayPane'
+}) {
     // Style for inactive/background paths — very subtle so they don't clash when stacking
     const inactiveStyle = useMemo(() => ({
         weight: 2,
@@ -64,6 +71,7 @@ function PathRenderer({ currentPath, filteredPaths, drawnSelections }) {
                         key={getPathKey(path, index, 'inactive')}
                         data={path}
                         style={inactiveStyle}
+                        pane={backgroundPane}
                     />
                 );
             })}
@@ -74,6 +82,7 @@ function PathRenderer({ currentPath, filteredPaths, drawnSelections }) {
                     key={getPathKey(currentPath, 0, 'active')}
                     data={currentPath}
                     style={activeStyle}
+                    pane={activePane}
                 />
             )}
 
@@ -100,6 +109,7 @@ function PathRenderer({ currentPath, filteredPaths, drawnSelections }) {
                     key={`selection-${index}`}
                     data={selection}
                     style={getSelectionStyle(selection)}
+                    pane={selectionPane}
                 />
             ))}
         </>

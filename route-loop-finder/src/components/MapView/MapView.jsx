@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Rectangle, Polygon, Circle } from 'react-leaflet';
+import React, { useState } from 'react';
+import { MapContainer, TileLayer, Rectangle, Polygon, Circle, Pane } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import './MapView.css';
 
@@ -7,6 +8,7 @@ import DrawingHandler from './DrawingHandler';
 import PathMarker from './PathMarker';
 import PathRenderer from './PathRenderer';
 import BoundsSelector from './BoundsSelector';
+import MapTileSwitcher, { MAP_STYLES } from './MapTileSwitcher';
 
 const DEFAULT_CENTER = [35.626288, -82.551141]; // Default to Asheville area
 const DEFAULT_ZOOM = 13;
@@ -35,6 +37,8 @@ function MapView({
     activeGraph,
     pathUndoRef
 }) {
+    const [activeStyle, setActiveStyle] = useState('light');
+
     const getSavedPosition = () => {
         try {
             const saved = localStorage.getItem('lastMapPosition');
@@ -111,6 +115,12 @@ function MapView({
                 {isExcludeMode && <span style={{ color: '#ff4444', marginLeft: '8px' }}>(EXCLUDE)</span>}
             </div>
 
+            {/* Tile Switcher */}
+            <MapTileSwitcher
+                currentStyle={activeStyle}
+                onStyleChange={setActiveStyle}
+            />
+
             {/* Instruction hint */}
             <div className={`map-view__hint ${hintText ? 'map-view__hint--visible' : ''}`}>
                 {hintText}
@@ -122,10 +132,16 @@ function MapView({
                 style={{ height: '100%', width: '100%' }}
                 zoomControl={true}
             >
-                {/* Light, minimal tile layer */}
+                {/* Panes for Z-Index Management */}
+                <Pane name="backgroundPaths" style={{ zIndex: 400 }} />
+                <Pane name="activePath" style={{ zIndex: 450 }} />
+                <Pane name="tools" style={{ zIndex: 500 }} />
+
+                {/* Dynamic Tile Layer */}
                 <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
+                    key={activeStyle} // Force re-render when style changes
+                    url={MAP_STYLES[activeStyle].url}
+                    attribution={MAP_STYLES[activeStyle].attribution}
                 />
 
                 {/* Click handler for input mode */}
@@ -173,6 +189,9 @@ function MapView({
                         currentPath={currentPath}
                         filteredPaths={filteredPaths}
                         drawnSelections={drawnSelections}
+                        backgroundPane="backgroundPaths"
+                        activePane="activePath"
+                        selectionPane="tools"
                     />
                 )}
 
