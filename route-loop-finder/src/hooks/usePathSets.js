@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { filterByDistance, filterByDifficulty, filterBySelection, sortPaths } from '../utils/pathFiltering';
 
 /**
@@ -9,7 +9,7 @@ export function usePathSets() {
     // Map of pathSetId -> { markerPosition, paths: [] }
     const [pathSets, setPathSets] = useState({});
     const [activePathSetId, setActivePathSetId] = useState(null);
-    const [currentPathIndex, setCurrentPathIndex] = useState(0);
+    const [selectedPathId, setSelectedPathId] = useState(null);
     const [distanceRange, setDistanceRange] = useState(() => {
         const saved = localStorage.getItem('distanceRange');
         return saved ? JSON.parse(saved) : [0, 200];
@@ -53,7 +53,7 @@ export function usePathSets() {
             }
         }));
         setActivePathSetId(pathSetId);
-        setCurrentPathIndex(0);
+        setSelectedPathId(null);
     }, []);
 
     // Add a path to an existing path set
@@ -62,11 +62,22 @@ export function usePathSets() {
             const pathSet = prev[pathSetId];
             if (!pathSet) return prev;
 
+            // Generate a unique ID for the path if it doesn't have one
+            // Use crypto.randomUUID where available, or fallback to timestamp+random
+            const uniqueId = typeof crypto !== 'undefined' && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `${pathSetId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            const pathWithId = {
+                ...pathData,
+                id: uniqueId
+            };
+
             return {
                 ...prev,
                 [pathSetId]: {
                     ...pathSet,
-                    paths: [...pathSet.paths, pathData]
+                    paths: [...pathSet.paths, pathWithId]
                 }
             };
         });
@@ -93,7 +104,7 @@ export function usePathSets() {
         }
         if (pathSets[pathSetId]) {
             setActivePathSetId(pathSetId);
-            setCurrentPathIndex(0);
+            setSelectedPathId(null);
         }
     }, [pathSets]);
 
@@ -165,41 +176,95 @@ export function usePathSets() {
         return sortPaths(paths, sortBy, sortAscending);
     }, [activePathSet, distanceRange, difficultyRange, drawnSelections, sortBy, sortAscending]);
 
-    // Ensure currentPathIndex stays within bounds when filteredPaths changes
-    useEffect(() => {
-        if (filteredPaths.length > 0 && currentPathIndex >= filteredPaths.length) {
-            setCurrentPathIndex(0);
-        }
-    }, [filteredPaths, currentPathIndex]);
 
-    // Reset to first path when sorting changes
-    useEffect(() => {
-        setCurrentPathIndex(0);
-    }, [sortBy, sortAscending]);
 
-    // Get the currently displayed path
+    // Get the currently displayed path based on ID
     const currentPath = useMemo(() => {
-        return filteredPaths[currentPathIndex] || null;
-    }, [filteredPaths, currentPathIndex]);
+        if (!selectedPathId) return filteredPaths[0] || null;
+        return filteredPaths.find(p => p.id === selectedPathId) || filteredPaths[0] || null;
+    }, [filteredPaths, selectedPathId]);
+
+    // Derive the index for display components
+    const currentPathIndex = useMemo(() => {
+        if (!currentPath) return 0;
+        return filteredPaths.indexOf(currentPath);
+    }, [filteredPaths, currentPath]);
+
+    // Ensure selectedPathId is valid when filteredPaths changes
+    useEffect(() => {
+        if (filteredPaths.length > 0) {
+            // If we have a selected path, check if it's still in the list
+            if (selectedPathId) {
+                const stillExists = filteredPaths.some(p => p.id === selectedPathId);
+                if (!stillExists) {
+                    // It's gone, default to the first one
+                    setSelectedPathId(filteredPaths[0].id);
+                }
+            } else {
+                // No selection, select the first one
+                setSelectedPathId(filteredPaths[0].id);
+            }
+        } else {
+            setSelectedPathId(null);
+        }
+    }, [filteredPaths, selectedPathId]);
+
+    // Wrappers for sort setters to capture current path - NO LONGER NEEDED with ID-based selection!
+    // The ID based selection automatically preserves the selection because the ID doesn't change on sort.
+    const handleSetSortBy = useCallback((newSortBy) => {
+        setSortBy(newSortBy);
+    }, []);
+
+    const handleSetSortAscending = useCallback((newAsc) => {
+        setSortAscending(newAsc);
+        setSelectedPathId(null); // Reset selection to default to the first one in the new order
+    }, []);
 
     // Navigation helpers
     const nextPath = useCallback(() => {
-        if (currentPathIndex < filteredPaths.length - 1) {
-            setCurrentPathIndex(prev => prev + 1);
+        const currentIndex = filteredPaths.findIndex(p => p.id === currentPath?.id);
+        if (currentIndex < filteredPaths.length - 1) {
+            setSelectedPathId(filteredPaths[currentIndex + 1].id);
         }
-    }, [currentPathIndex, filteredPaths.length]);
+    }, [filteredPaths, currentPath]);
 
     const prevPath = useCallback(() => {
-        if (currentPathIndex > 0) {
-            setCurrentPathIndex(prev => prev - 1);
+        const currentIndex = filteredPaths.findIndex(p => p.id === currentPath?.id);
+        if (currentIndex > 0) {
+            setSelectedPathId(filteredPaths[currentIndex - 1].id);
         }
-    }, [currentPathIndex]);
+    }, [filteredPaths, currentPath]);
+
+    const jumpPath = useCallback((delta) => {
+        const currentIndex = filteredPaths.findIndex(p => p.id === currentPath?.id);
+        if (currentIndex === -1 && filteredPaths.length > 0) {
+            setSelectedPathId(filteredPaths[0].id);
+            return;
+        }
+
+        const newIndex = Math.min(Math.max(currentIndex + delta, 0), filteredPaths.length - 1);
+        if (newIndex !== currentIndex) {
+            setSelectedPathId(filteredPaths[newIndex].id);
+        }
+    }, [filteredPaths, currentPath]);
+
+    const goToFirst = useCallback(() => {
+        if (filteredPaths.length > 0) {
+            setSelectedPathId(filteredPaths[0].id);
+        }
+    }, [filteredPaths]);
+
+    const goToLast = useCallback(() => {
+        if (filteredPaths.length > 0) {
+            setSelectedPathId(filteredPaths[filteredPaths.length - 1].id);
+        }
+    }, [filteredPaths]);
 
     const goToPath = useCallback((index) => {
         if (index >= 0 && index < filteredPaths.length) {
-            setCurrentPathIndex(index);
+            setSelectedPathId(filteredPaths[index].id);
         }
-    }, [filteredPaths.length]);
+    }, [filteredPaths]);
 
     // Get all path set markers for display
     const pathSetMarkers = useMemo(() => {
@@ -287,11 +352,14 @@ export function usePathSets() {
         undoLastSelection,
         setDistanceRange,
         setDifficultyRange,
-        setSortBy,
-        setSortAscending,
+        setSortBy: handleSetSortBy,
+        setSortAscending: handleSetSortAscending,
         nextPath,
         prevPath,
         goToPath,
+        jumpPath,
+        goToFirst,
+        goToLast,
         reverseCurrentPathProfile
     };
 }

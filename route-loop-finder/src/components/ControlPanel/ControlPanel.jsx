@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, MapPin, MousePointer2, Pencil, Undo2, Ban, ArrowUpDown, Minimize2, Maximize2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MapPin, MousePointer2, Pencil, Undo2, Ban, ArrowUpDown, Minimize2, Maximize2 } from 'lucide-react';
 import './ControlPanel.css';
 
 import PathInfo from './PathInfo';
@@ -28,6 +28,9 @@ function ControlPanel({
     setSortAscending,
     onNextPath,
     onPrevPath,
+    onJumpPath,
+    onGoToFirst,
+    onGoToLast,
     hasActivePathSet,
     activeTool,
     setActiveTool,
@@ -75,9 +78,29 @@ function ControlPanel({
                     <div className="control-panel__nav">
                         <button
                             className="control-panel__nav-btn"
+                            onClick={onGoToFirst}
+                            disabled={!canGoPrev}
+                            aria-label="First path"
+                            title="First Path"
+                        >
+                            <ChevronsLeft size={18} />
+                        </button>
+                        <button
+                            className="control-panel__nav-btn"
+                            onClick={() => onJumpPath && onJumpPath(-5)}
+                            disabled={!canGoPrev}
+                            aria-label="Back 5 paths"
+                            title="Back 5"
+                            style={{ fontSize: '10px', fontWeight: 'bold', width: '24px' }}
+                        >
+                            -5
+                        </button>
+                        <button
+                            className="control-panel__nav-btn"
                             onClick={onPrevPath}
                             disabled={!canGoPrev}
                             aria-label="Previous path"
+                            title="Previous Path"
                         >
                             <ChevronLeft size={20} />
                         </button>
@@ -86,8 +109,28 @@ function ControlPanel({
                             onClick={onNextPath}
                             disabled={!canGoNext}
                             aria-label="Next path"
+                            title="Next Path"
                         >
                             <ChevronRight size={20} />
+                        </button>
+                        <button
+                            className="control-panel__nav-btn"
+                            onClick={() => onJumpPath && onJumpPath(5)}
+                            disabled={!canGoNext}
+                            aria-label="Forward 5 paths"
+                            title="Forward 5"
+                            style={{ fontSize: '10px', fontWeight: 'bold', width: '24px' }}
+                        >
+                            +5
+                        </button>
+                        <button
+                            className="control-panel__nav-btn"
+                            onClick={onGoToLast}
+                            disabled={!canGoNext}
+                            aria-label="Last path"
+                            title="Last Path"
+                        >
+                            <ChevronsRight size={18} />
                         </button>
                     </div>
 
@@ -262,6 +305,20 @@ function ControlPanel({
                             <div className="control-panel__section">
                                 <div className="control-panel__section-title">View Options</div>
                                 <div className="settings-grid">
+                                    {showPathPreview && (
+                                        <label className="setting-item full-width" style={{ marginTop: '8px' }}>
+                                            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Preview Opacity: {Math.round(pathPreviewOpacity * 100)}%</span>
+                                            <input
+                                                type="range"
+                                                min="0.1"
+                                                max="1.0"
+                                                step="0.1"
+                                                value={pathPreviewOpacity}
+                                                onChange={e => setPathPreviewOpacity(parseFloat(e.target.value))}
+                                                style={{ width: '100%' }}
+                                            />
+                                        </label>
+                                    )}
                                     <label className="checkbox-item" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
                                         <input
                                             type="checkbox"
@@ -287,20 +344,7 @@ function ControlPanel({
                                         />
                                         Show Centroids
                                     </label>
-                                    {showPathPreview && (
-                                        <label className="setting-item full-width" style={{ marginTop: '8px' }}>
-                                            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Preview Opacity: {Math.round(pathPreviewOpacity * 100)}%</span>
-                                            <input
-                                                type="range"
-                                                min="0.1"
-                                                max="1.0"
-                                                step="0.1"
-                                                value={pathPreviewOpacity}
-                                                onChange={e => setPathPreviewOpacity(parseFloat(e.target.value))}
-                                                style={{ width: '100%' }}
-                                            />
-                                        </label>
-                                    )}
+
                                 </div>
                             </div>
 

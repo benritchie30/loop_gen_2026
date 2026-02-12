@@ -35,6 +35,9 @@ function App() {
     nextPath,
     prevPath,
     goToPath,
+    jumpPath,
+    goToFirst,
+    goToLast,
     reverseCurrentPathProfile,
     undoLastSelection
   } = usePathSets();
@@ -464,6 +467,9 @@ function App() {
         setSortAscending={setSortAscending}
         onNextPath={nextPath}
         onPrevPath={prevPath}
+        onJumpPath={jumpPath}
+        onGoToFirst={goToFirst}
+        onGoToLast={goToLast}
         hasActivePathSet={!!activePathSetId}
         activeTool={activeTool}
         setActiveTool={setActiveTool}

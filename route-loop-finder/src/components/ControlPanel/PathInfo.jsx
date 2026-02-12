@@ -31,7 +31,7 @@ function PathInfo({ path }) {
             </div>
 
             <div className="path-info__item">
-                <span className="path-info__label">Loop Ratio</span>
+                <span className="path-info__label">Loop Path Percentage</span>
                 <span className="path-info__value">{(loopRatio * 100).toFixed(0)}%</span>
             </div>
 
@@ -41,7 +41,7 @@ function PathInfo({ path }) {
             </div>
 
             <div className="path-info__item">
-                <span className="path-info__label">Climbing</span>
+                <span className="path-info__label">Total Climbing</span>
                 <span className="path-info__value">{formatClimbing(totalClimb)}</span>
             </div>
 
