@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { Minimize2, ArrowLeftRight } from 'lucide-react';
 import './ElevationProfileWindow.css';
 
@@ -11,14 +11,37 @@ const PADDING = { top: 16, right: 24, bottom: 32, left: 48 };
  * Centered at the bottom of the screen with larger dimensions.
  */
 function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHover, onFlipPath }) {
+    const [zoomDomain, setZoomDomain] = useState(null); // [minDist, maxDist]
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState(null);
+    const [dragCurrent, setDragCurrent] = useState(null);
+    const [showGrade, setShowGrade] = useState(false); // Default to hidden if noisy
+    const svgRef = useRef(null);
+
     const chartData = useMemo(() => {
         if (!elevationProfile || elevationProfile.length < 2) return null;
 
-        const distances = elevationProfile.map(p => p[0]);
-        const elevations = elevationProfile.map(p => p[1]);
+        let dataPoints = elevationProfile;
 
-        const minDist = distances[0];
-        const maxDist = distances[distances.length - 1];
+        // Filter data if zoomed
+        if (zoomDomain) {
+            dataPoints = elevationProfile.filter(p => p[0] >= zoomDomain[0] && p[0] <= zoomDomain[1]);
+        }
+
+        const distances = dataPoints.map(p => p[0]);
+        const elevations = dataPoints.map(p => p[1]);
+
+        let minDist = zoomDomain ? zoomDomain[0] : distances[0];
+        let maxDist = zoomDomain ? zoomDomain[1] : distances[distances.length - 1];
+
+        if (zoomDomain && dataPoints.length === 0) {
+            minDist = zoomDomain[0];
+            maxDist = zoomDomain[1];
+        } else if (!zoomDomain && distances.length > 0) {
+            minDist = distances[0];
+            maxDist = distances[distances.length - 1];
+        }
+
         const minElev = Math.min(...elevations);
         const maxElev = Math.max(...elevations);
 
@@ -66,9 +89,93 @@ function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHov
             });
         }
 
+        // Calculate grades (slope %)
+        // Use a smoothing window to avoid noise from point-to-point fluctuations
+        const GRADE_SAMPLE_DIST = 0.05; // miles (approx 260ft)
+        let rawGrades = [];
+
+        for (let i = 0; i < elevationProfile.length; i++) {
+            const currentDist = elevationProfile[i][0];
+
+            // Find start of window
+            let startIdx = i;
+            while (startIdx > 0 && (currentDist - elevationProfile[startIdx][0]) < GRADE_SAMPLE_DIST / 2) {
+                startIdx--;
+            }
+
+            // Find end of window
+            let endIdx = i;
+            while (endIdx < elevationProfile.length - 1 && (elevationProfile[endIdx][0] - currentDist) < GRADE_SAMPLE_DIST / 2) {
+                endIdx++;
+            }
+
+            // If window is too small (e.g. at very start/end with few points), extend it
+            if (startIdx === endIdx && elevationProfile.length > 1) {
+                if (startIdx > 0) startIdx--;
+                else if (endIdx < elevationProfile.length - 1) endIdx++;
+            }
+
+            const p1 = elevationProfile[startIdx];
+            const p2 = elevationProfile[endIdx];
+            const distMi = p2[0] - p1[0];
+            const elevFt = p2[1] - p1[1];
+
+            let grade = 0;
+            if (distMi > 0.0001) {
+                grade = (elevFt / (distMi * 5280)) * 100;
+            }
+            rawGrades.push(grade);
+        }
+
+        // Apply a secondary Moving Average smoothing pass
+        // This helps remove "step" artifacts from the windowed calculation
+        const SMA_WINDOW = 5; // number of points to average
+        const grades = rawGrades.map((_, i, arr) => {
+            const start = Math.max(0, i - Math.floor(SMA_WINDOW / 2));
+            const end = Math.min(arr.length, i + Math.ceil(SMA_WINDOW / 2));
+            const subset = arr.slice(start, end);
+            const sum = subset.reduce((a, b) => a + b, 0);
+            return sum / subset.length;
+        });
+
+        // Calculate visible grades min/max for scaling
+        // Use the smoothed grades we calculated for the full profile
+        let visibleGrades = [];
+        if (dataPoints.length > 0) {
+            const startIdx = elevationProfile.indexOf(dataPoints[0]);
+            if (startIdx !== -1) {
+                visibleGrades = grades.slice(startIdx, startIdx + dataPoints.length);
+            }
+        }
+
+        // If for some reason lookup failed (shouldn't happen with filter), fallback
+        if (visibleGrades.length === 0 && dataPoints.length > 0) {
+            visibleGrades = new Array(dataPoints.length).fill(0);
+        }
+
+        const minGrade = Math.min(...visibleGrades, -1);
+        const maxGrade = Math.max(...visibleGrades, 1);
+        // Symmetrical grade scale usually looks best or just fit
+        const maxAbsGrade = Math.max(Math.abs(minGrade), Math.abs(maxGrade));
+        const gradeYMin = -maxAbsGrade * 1.2;
+        const gradeYMax = maxAbsGrade * 1.2;
+
+        const scaleGradeY = (g) => PADDING.top + plotH - ((g - gradeYMin) / (gradeYMax - gradeYMin)) * plotH;
+
+        // Build SVG path for Grade Line
+        // We match dataPoints
+        const gradeLinePoints = dataPoints.map((p, i) => {
+            const g = visibleGrades[i] || 0;
+            return `${scaleX(p[0]).toFixed(1)},${scaleGradeY(g).toFixed(1)}`;
+        });
+        const gradePath = `M${gradeLinePoints.join('L')}`;
+
+
         return {
+            dataPoints,
             linePath,
             areaPath,
+            gradePath,
             yTicks,
             xTicks,
             plotW,
@@ -78,16 +185,67 @@ function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHov
             maxElev: Math.round(maxElev),
             scaleX,
             scaleY,
+            scaleGradeY,
             invertX,
             minDist,
-            maxDist
+            maxDist,
+            grades, // full grades
+            visibleGrades // for stats if needed
         };
-    }, [elevationProfile]);
+    }, [elevationProfile, zoomDomain]);
+
+    const getMouseX = (e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        return e.clientX - rect.left;
+    };
+
+    const handleMouseDown = (e) => {
+        if (!chartData) return;
+        const x = getMouseX(e);
+        // Only start if within plot area
+        if (x >= PADDING.left && x <= PADDING.left + chartData.plotW) {
+            setIsDragging(true);
+            setDragStart(x);
+            setDragCurrent(x);
+        }
+    };
+
+    const handleMouseUp = (e) => {
+        if (isDragging) {
+            setIsDragging(false);
+            if (Math.abs(dragCurrent - dragStart) > 5) {
+                // Determine range
+                const x1 = Math.min(dragStart, dragCurrent);
+                const x2 = Math.max(dragStart, dragCurrent);
+
+                // Convert to distance
+                const d1 = chartData.invertX(x1);
+                const d2 = chartData.invertX(x2);
+
+                // Set zoom
+                setZoomDomain([Math.max(chartData.minDist, d1), Math.min(chartData.maxDist, d2)]);
+            }
+            setDragStart(null);
+            setDragCurrent(null);
+        }
+    };
+
+    // Global mouse up to catch release outside
+    useEffect(() => {
+        const up = () => {
+            if (isDragging) setIsDragging(false);
+        };
+        window.addEventListener('mouseup', up);
+        return () => window.removeEventListener('mouseup', up);
+    }, [isDragging]);
 
     const handleMouseMove = (e) => {
         if (!chartData) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
+        const x = getMouseX(e);
+
+        if (isDragging) {
+            setDragCurrent(x);
+        }
 
         // Convert x to distance
         let dist = chartData.invertX(x);
@@ -95,25 +253,48 @@ function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHov
         // Clamp to range
         dist = Math.max(chartData.minDist, Math.min(dist, chartData.maxDist));
 
-        // Find closest point in profile
-        // Profile is sorted by distance
-        let closest = elevationProfile[0];
+        // Find closest point in visible data (dataPoints)
+        const points = chartData.dataPoints || elevationProfile;
+        let closest = points[0];
         let minDiff = Math.abs(closest[0] - dist);
+        let idx = 0;
 
-        for (let i = 1; i < elevationProfile.length; i++) {
-            const diff = Math.abs(elevationProfile[i][0] - dist);
+        for (let i = 1; i < points.length; i++) {
+            const diff = Math.abs(points[i][0] - dist);
             if (diff < minDiff) {
                 minDiff = diff;
-                closest = elevationProfile[i];
+                closest = points[i];
+                idx = i;
             }
         }
 
         // closest format: [dist_mi, elev_ft, lat, lng, bearing]
+
+        // Calculate grade
+        let grade = 0;
+        if (chartData.grades && chartData.grades.length > 0) {
+            // Grades should map to the visible segments if we recalculated them for visible range
+            // But wait, 'grades' in chartData is the FULL grades array (see return object). 
+            // 'visibleGrades' is the subset.
+            // 'points' is visible subset (dataPoints).
+            // 'idx' is index in 'points'.
+
+            // If we use visibleGrades, it maps 1:1 to points.
+            if (chartData.visibleGrades && idx < chartData.visibleGrades.length) {
+                grade = chartData.visibleGrades[idx];
+            } else {
+                // Fallback
+                const gradeIdx = Math.min(Math.max(0, idx), chartData.grades.length - 1);
+                grade = chartData.grades[gradeIdx];
+            }
+        }
+
         onHover({
             distance: closest[0],
             elevation: closest[1],
             coordinate: [closest[2], closest[3]],
-            bearing: closest[4] // Optional
+            bearing: closest[4],
+            grade: grade
         });
     };
 
@@ -129,8 +310,43 @@ function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHov
         <div className="elevation-window">
             <div className="elevation-window__content">
                 <div className="elevation-window__header">
-                    <h3>Elevation Profile</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <h3>Elevation Profile</h3>
+                        <div className="elevation-window__stats">
+                            <div className="elevation-window__stat">
+                                <span>Dist:</span>
+                                <span className="elevation-window__stat-value">
+                                    {hoveredPoint ? hoveredPoint.distance.toFixed(2) : '-.--'} mi
+                                </span>
+                            </div>
+                            <div className="elevation-window__stat">
+                                <span>Elev:</span>
+                                <span className="elevation-window__stat-value">
+                                    {hoveredPoint ? Math.round(hoveredPoint.elevation) : '---'} ft
+                                </span>
+                            </div>
+                            {showGrade && (
+                                <div className="elevation-window__stat">
+                                    <span>Grade:</span>
+                                    <span className={`elevation-window__stat-value ${hoveredPoint
+                                        ? (hoveredPoint.grade >= 0 ? 'elevation-window__stat-value--grade-pos' : 'elevation-window__stat-value--grade-neg')
+                                        : ''
+                                        }`}>
+                                        {hoveredPoint ? `${Math.abs(hoveredPoint.grade).toFixed(1)}%` : '--.-%'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                     <div className="elevation-window__controls">
+                        <button
+                            className={`elevation-window__flip-btn ${showGrade ? 'active' : ''}`}
+                            onClick={() => setShowGrade(!showGrade)}
+                            title="Toggle Grade Display"
+                        >
+                            <span style={{ fontSize: '14px', fontWeight: 'bold' }}>%</span>
+                            Grade
+                        </button>
                         <button
                             className="elevation-window__flip-btn"
                             onClick={onFlipPath}
@@ -139,6 +355,16 @@ function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHov
                             <ArrowLeftRight size={16} />
                             Reverse Path
                         </button>
+                        {zoomDomain && (
+                            <button
+                                className="elevation-window__flip-btn"
+                                onClick={() => setZoomDomain(null)}
+                                title="Reset Zoom"
+                            >
+                                <Minimize2 size={16} style={{ transform: 'rotate(45deg)' }} />
+                                Reset Zoom
+                            </button>
+                        )}
                         <button
                             className="elevation-window__close"
                             onClick={onClose}
@@ -148,171 +374,231 @@ function ElevationProfileWindow({ elevationProfile, onClose, hoveredPoint, onHov
                         </button>
                     </div>
                 </div>
-                <svg
-                    width={CHART_WIDTH}
-                    height={CHART_HEIGHT}
-                    viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-                    style={{ display: 'block', width: '100%', height: 'auto', cursor: 'crosshair' }}
-                    onMouseMove={handleMouseMove}
-                    onMouseLeave={handleMouseLeave}
-                >
-                    <defs>
-                        <linearGradient id="elevGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.5" />
-                            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0.08" />
-                        </linearGradient>
-                    </defs>
+                <div className="elevation-window__chart-container">
+                    <svg
+                        ref={svgRef}
+                        width={CHART_WIDTH}
+                        height={CHART_HEIGHT}
+                        viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+                        style={{
+                            display: 'block',
+                            width: '100%',
+                            height: '100%',
+                            cursor: isDragging ? 'ew-resize' : 'crosshair',
+                            userSelect: 'none'
+                        }}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseLeave}
+                    >
+                        <defs>
+                            <linearGradient id="elevGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.5" />
+                                <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0.08" />
+                            </linearGradient>
+                            <clipPath id="chart-clip">
+                                <rect
+                                    x={PADDING.left}
+                                    y={PADDING.top}
+                                    width={chartData.plotW}
+                                    height={chartData.plotH}
+                                />
+                            </clipPath>
+                        </defs>
 
-                    {/* Filled area */}
-                    <path d={chartData.areaPath} fill="url(#elevGradient)" />
-
-                    {/* Grid lines */}
-                    {chartData.yTicks.map((tick, i) => (
-                        <line
-                            key={`y-grid-${i}`}
-                            x1={PADDING.left}
-                            y1={tick.y}
-                            x2={PADDING.left + chartData.plotW}
-                            y2={tick.y}
-                            stroke="var(--color-border)"
-                            strokeWidth="0.5"
-                            strokeDasharray="3,3"
-                            opacity="0.5"
-                        />
-                    ))}
-
-                    {/* Main line */}
-                    <path
-                        d={chartData.linePath}
-                        fill="none"
-                        stroke="var(--color-primary)"
-                        strokeWidth="2.5"
-                        strokeLinejoin="round"
-                    />
-
-                    {/* Y-axis */}
-                    <line
-                        x1={PADDING.left}
-                        y1={PADDING.top}
-                        x2={PADDING.left}
-                        y2={PADDING.top + chartData.plotH}
-                        stroke="var(--color-border)"
-                        strokeWidth="1"
-                    />
-
-                    {/* X-axis */}
-                    <line
-                        x1={PADDING.left}
-                        y1={chartData.bottomY}
-                        x2={PADDING.left + chartData.plotW}
-                        y2={chartData.bottomY}
-                        stroke="var(--color-border)"
-                        strokeWidth="1"
-                    />
-
-                    {/* Y-axis ticks */}
-                    {chartData.yTicks.map((tick, i) => (
-                        <g key={`y-${i}`}>
+                        {/* Grid lines */}
+                        {chartData.yTicks.map((tick, i) => (
                             <line
-                                x1={PADDING.left - 4}
+                                key={`y-grid-${i}`}
+                                x1={PADDING.left}
                                 y1={tick.y}
-                                x2={PADDING.left}
+                                x2={PADDING.left + chartData.plotW}
                                 y2={tick.y}
                                 stroke="var(--color-border)"
-                                strokeWidth="1"
+                                strokeWidth="0.5"
+                                strokeDasharray="3,3"
+                                opacity="0.3"
                             />
-                            <text
-                                x={PADDING.left - 8}
-                                y={tick.y + 4}
-                                textAnchor="end"
-                                fontSize="11"
-                                fill="var(--color-text-muted)"
-                            >
-                                {tick.label}
-                            </text>
-                        </g>
-                    ))}
+                        ))}
 
-                    {/* X-axis ticks */}
-                    {chartData.xTicks.map((tick, i) => (
-                        <g key={`x-${i}`}>
-                            <line
-                                x1={tick.x}
-                                y1={chartData.bottomY}
-                                x2={tick.x}
-                                y2={chartData.bottomY + 4}
-                                stroke="var(--color-border)"
-                                strokeWidth="1"
+                        <g clipPath="url(#chart-clip)">
+                            {/* Filled area (Elevation) */}
+                            <path d={chartData.areaPath} fill="url(#elevGradient)" />
+
+                            {/* Elevation Line */}
+                            <path
+                                d={chartData.linePath}
+                                fill="none"
+                                stroke="var(--color-primary)"
+                                strokeWidth="2.5"
+                                strokeLinejoin="round"
                             />
-                            <text
-                                x={tick.x}
-                                y={chartData.bottomY + 18}
-                                textAnchor="middle"
-                                fontSize="11"
-                                fill="var(--color-text-muted)"
-                            >
-                                {tick.label}
-                            </text>
-                        </g>
-                    ))}
 
-                    {/* Hover Indicator */}
-                    {hoveredPoint && (
-                        <g>
+                            {/* Grade Line */}
+                            {showGrade && (
+                                <path
+                                    d={chartData.gradePath}
+                                    fill="none"
+                                    stroke="#f59e0b"
+                                    strokeWidth="1.5"
+                                    strokeOpacity="0.8"
+                                    strokeLinejoin="round"
+                                />
+                            )}
+                        </g>
+
+                        {/* Selection Rectangle */}
+                        {isDragging && dragStart !== null && dragCurrent !== null && (
+                            <g clipPath="url(#chart-clip)">
+                                <rect
+                                    x={Math.min(dragStart, dragCurrent)}
+                                    y={PADDING.top}
+                                    width={Math.abs(dragCurrent - dragStart)}
+                                    height={chartData.plotH}
+                                    fill="rgba(33, 150, 243, 0.2)"
+                                    stroke="rgba(33, 150, 243, 0.5)"
+                                />
+                            </g>
+                        )}
+
+                        {/* Y-axis (Elevation) */}
+                        <line
+                            x1={PADDING.left}
+                            y1={PADDING.top}
+                            x2={PADDING.left}
+                            y2={PADDING.top + chartData.plotH}
+                            stroke="var(--color-border)"
+                            strokeWidth="1"
+                        />
+
+                        {/* Y-axis ticks (Elevation) */}
+                        {chartData.yTicks.map((tick, i) => (
+                            <g key={`y-${i}`}>
+                                <line
+                                    x1={PADDING.left - 4}
+                                    y1={tick.y}
+                                    x2={PADDING.left}
+                                    y2={tick.y}
+                                    stroke="var(--color-border)"
+                                    strokeWidth="1"
+                                />
+                                <text
+                                    x={PADDING.left - 8}
+                                    y={tick.y + 4}
+                                    textAnchor="end"
+                                    fontSize="11"
+                                    fill="var(--color-text-muted)"
+                                >
+                                    {tick.label}
+                                </text>
+                            </g>
+                        ))}
+
+                        {/* X-axis */}
+                        <line
+                            x1={PADDING.left}
+                            y1={chartData.bottomY}
+                            x2={PADDING.left + chartData.plotW}
+                            y2={chartData.bottomY}
+                            stroke="var(--color-border)"
+                            strokeWidth="1"
+                        />
+
+                        {/* X-axis ticks */}
+                        {chartData.xTicks.map((tick, i) => (
+                            <g key={`x-${i}`}>
+                                <line
+                                    x1={tick.x}
+                                    y1={chartData.bottomY}
+                                    x2={tick.x}
+                                    y2={chartData.bottomY + 4}
+                                    stroke="var(--color-border)"
+                                    strokeWidth="1"
+                                />
+                                <text
+                                    x={tick.x}
+                                    y={chartData.bottomY + 18}
+                                    textAnchor="middle"
+                                    fontSize="11"
+                                    fill="var(--color-text-muted)"
+                                >
+                                    {tick.label}
+                                </text>
+                            </g>
+                        ))}
+
+                        {/* Hover Cursor Line */}
+                        {hoveredPoint && (
                             <line
                                 x1={chartData.scaleX(hoveredPoint.distance)}
                                 y1={PADDING.top}
                                 x2={chartData.scaleX(hoveredPoint.distance)}
                                 y2={chartData.bottomY}
-                                stroke="var(--color-accent)"
+                                stroke="var(--color-text)"
                                 strokeWidth="1"
                                 strokeDasharray="4,2"
+                                opacity="0.5"
+                                clipPath="url(#chart-clip)"
                             />
-                            <circle
-                                cx={chartData.scaleX(hoveredPoint.distance)}
-                                cy={chartData.scaleY(hoveredPoint.elevation)}
-                                r="4"
-                                fill="white"
-                                stroke="var(--color-accent)"
-                                strokeWidth="2"
-                            />
-                            <text
-                                x={Math.min(chartData.scaleX(hoveredPoint.distance) + 8, CHART_WIDTH - 60)}
-                                y={Math.max(chartData.scaleY(hoveredPoint.elevation) - 8, PADDING.top + 10)}
-                                fontSize="11"
-                                fontWeight="bold"
-                                fill="var(--color-text)"
-                                stroke="var(--bg-color)"
-                                strokeWidth="3"
-                                paintOrder="stroke"
-                            >
-                                {hoveredPoint.elevation} ft
-                            </text>
-                        </g>
-                    )}
+                        )}
 
-                    {/* Axis labels */}
-                    <text
-                        x={PADDING.left + chartData.plotW / 2}
-                        y={CHART_HEIGHT - 6}
-                        textAnchor="middle"
-                        fontSize="12"
-                        fill="var(--color-text-muted)"
-                    >
-                        Distance (miles)
-                    </text>
+                        {/* Axis labels */}
+                        <text
+                            x={PADDING.left + chartData.plotW / 2}
+                            y={CHART_HEIGHT - 6}
+                            textAnchor="middle"
+                            fontSize="12"
+                            fill="var(--color-text-muted)"
+                        >
+                            Distance (miles)
+                        </text>
 
-                    <text
-                        x={16}
-                        y={PADDING.top + chartData.plotH / 2}
-                        textAnchor="middle"
-                        fontSize="12"
-                        fill="var(--color-text-muted)"
-                        transform={`rotate(-90 16 ${PADDING.top + chartData.plotH / 2})`}
-                    >
-                        Elevation (feet)
-                    </text>
-                </svg>
+                        <text
+                            x={16}
+                            y={PADDING.top + chartData.plotH / 2}
+                            textAnchor="middle"
+                            fontSize="12"
+                            fill="var(--color-text-muted)"
+                            transform={`rotate(-90 16 ${PADDING.top + chartData.plotH / 2})`}
+                        >
+                            Elev (ft)
+                        </text>
+                        {/* Right Y-axis (Grade) */}
+                        {showGrade && (
+                            <>
+                                <line
+                                    x1={PADDING.left + chartData.plotW}
+                                    y1={PADDING.top}
+                                    x2={PADDING.left + chartData.plotW}
+                                    y2={PADDING.top + chartData.plotH}
+                                    stroke="var(--color-border)"
+                                    strokeWidth="1"
+                                />
+
+                                {/* Right Y-axis Ticks (Grade) */}
+                                <g>
+                                    {/* We need simple ticks for grade. 0, min, max? 
+                                         Let's do 5 ticks based on gradeYMin/Max */}
+                                    {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+                                        return null;
+                                    })}
+                                </g>
+
+                                <text
+                                    x={PADDING.left + chartData.plotW + 16}
+                                    y={PADDING.top + chartData.plotH / 2}
+                                    textAnchor="middle"
+                                    fontSize="12"
+                                    fill="var(--color-text-muted)"
+                                    transform={`rotate(90 ${PADDING.left + chartData.plotW + 16} ${PADDING.top + chartData.plotH / 2})`}
+                                >
+                                    Grade (%)
+                                </text>
+                            </>
+                        )}
+                    </svg>
+                </div>
             </div>
         </div>
     );
