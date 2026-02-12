@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+.venv/
+
+# Project Specific
+backend/graphs/
+backend/cache/
+backend/.env
+
+# JavaScript/Node
+node_modules/
+dist/
+build/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store

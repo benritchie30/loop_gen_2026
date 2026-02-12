@@ -1,0 +1,129 @@
+.graph-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px;
+    /* background: #2a2a2a; handled by control panel section usually */
+    margin-bottom: 4px;
+}
+
+.graph-selector.creating {
+    background: #222;
+    padding: 12px;
+    border: 1px solid #444;
+    border-radius: 8px;
+    margin-top: 4px;
+}
+
+.graph-selector__label {
+    font-size: 0.75rem;
+    color: #bbb;
+    margin-bottom: 2px;
+    font-weight: 500;
+}
+
+.graph-selector__row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.graph-dropdown {
+    flex: 1;
+    background: #1a1a1a;
+    color: #eee;
+    padding: 6px 8px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.graph-dropdown:focus {
+    border-color: #3b82f6;
+}
+
+.new-graph-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.new-graph-btn:hover {
+    background: #2563eb;
+}
+
+/* Creation Mode Styles */
+.graph-selector__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.graph-create-modes {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.mode-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: #2a2a2a;
+    color: #aaa;
+    border: 1px solid #444;
+    padding: 8px 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+}
+
+.mode-btn:hover {
+    background: #333;
+    color: #fff;
+}
+
+.mode-btn.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+.graph-create-status {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #eee;
+    background: #111;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px dashed #444;
+}
+
+.status-message.success {
+    color: #4ade80;
+    font-weight: 500;
+}
+
+.status-hint {
+    margin-top: 6px;
+    font-size: 0.7rem;
+    color: #666;
+}

@@ -1,0 +1,8 @@
+osmnx
+networkx
+websockets
+numpy
+pandas
+geopandas
+shapely
+scipy
