@@ -12,12 +12,12 @@ function createArrowIcon(bearingDeg, color) {
     return L.divIcon({
         className: 'direction-arrow',
         html: `<div class="direction-arrow__inner" style="transform: rotate(${cssRotation}deg)">
-            <svg viewBox="0 0 24 24" width="22" height="22">
-                <path d="M4 12 L18 12 M18 12 L12 6 M18 12 L12 18" stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <svg viewBox="0 0 24 24" width="32" height="32">
+                <path d="M8 4 L16 12 L8 20" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
             </svg>
         </div>`,
-        iconSize: [22, 22],
-        iconAnchor: [11, 11]
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
     });
 }
 
