@@ -186,6 +186,8 @@ function ControlPanel({
                                 setExclusionZones={setExclusionZones}
                                 isDrawingExclusion={isDrawingExclusion}
                                 setIsDrawingExclusion={setIsDrawingExclusion}
+                                showGraphBoundary={showGraphBoundary}
+                                setShowGraphBoundary={setShowGraphBoundary}
                             />
                         </div>
                     )}
@@ -298,7 +300,7 @@ function ControlPanel({
                                 <button
                                     className={`control-panel__tool-btn ${isExcludeMode ? 'active exclude' : ''}`}
                                     onClick={() => setIsExcludeMode(!isExcludeMode)}
-                                    title="Toggle Exclude Mode (Hold 'd')"
+                                    title="Toggle Exclude Mode (d)"
                                 >
                                     <Ban size={18} />
                                 </button>

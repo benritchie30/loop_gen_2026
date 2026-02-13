@@ -15,7 +15,9 @@ export default function GraphSelector({
     exclusionZones,
     setExclusionZones,
     isDrawingExclusion,
-    setIsDrawingExclusion
+    setIsDrawingExclusion,
+    showGraphBoundary,
+    setShowGraphBoundary
 }) {
     // If in creation mode (selecting bounds)
     if (isGraphCreateMode) {
@@ -106,6 +108,20 @@ export default function GraphSelector({
                 >
                     <Plus size={18} />
                 </button>
+            </div>
+
+            <div className="graph-selector__setting-row" style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="graph-selector__setting-label" style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                    Show Graph Boundary
+                </label>
+                <label className="switch">
+                    <input
+                        type="checkbox"
+                        checked={showGraphBoundary}
+                        onChange={(e) => setShowGraphBoundary(e.target.checked)}
+                    />
+                    <span className="slider round"></span>
+                </label>
             </div>
         </div>
     );

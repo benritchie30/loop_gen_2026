@@ -86,8 +86,10 @@ class GraphManager:
                     pass
         return boundaries
 
-    def _save_boundary(self, name: str, boundary_data: dict):
+    def _save_boundary(self, name: str, boundary_data: dict, exclusion_zones: list = None):
         """Saves boundary metadata as a sidecar JSON file."""
+        if exclusion_zones:
+            boundary_data['exclusion_zones'] = exclusion_zones
         path = os.path.join(self._graphs_dir, f"{name}.boundary.json")
         with open(path, 'w') as f:
             json.dump(boundary_data, f)
@@ -147,7 +149,6 @@ class GraphManager:
         mask = gdf_nodes.intersects(polygon)
         filtered_nodes = gdf_nodes[mask]
         
-
         return filtered_nodes.index.tolist()
 
     def get_nodes_near_polyline(self, coordinates: list, buffer_meters: float = 300.0) -> list:
@@ -314,12 +315,17 @@ class GraphManager:
             raise ValueError("Graphs directory not set.")
 
         print(f"Generating graph '{name}' for bbox: S={south}, W={west}, N={north}, E={east}")
+        # G = ox.graph_from_bbox(
+        #     bbox=(north, south, east, west),
+        #     network_type='drive',
+        #     custom_filter=custom_filter
+        # )
+        print("generating with hardcoded test")
         G = ox.graph_from_bbox(
             bbox=(north, south, east, west),
-            network_type='drive',
-            custom_filter=custom_filter
+            network_type='all',
+            # custom_filter=custom_filter
         )
-
         G = self._apply_exclusions(G, exclusion_zones)
         self._update_edge_names(G)
         G = self._relabel_graph(G)
@@ -335,7 +341,7 @@ class GraphManager:
         self._save_boundary(name, {
             'type': 'box',
             'north': north, 'south': south, 'east': east, 'west': west
-        })
+        }, exclusion_zones)
 
         print(f"Graph saved at: {file_path}")
         return name
@@ -372,7 +378,7 @@ class GraphManager:
         self._save_boundary(name, {
             'type': 'polygon',
             'coordinates': coordinates
-        })
+        }, exclusion_zones)
 
         print(f"Graph saved at: {file_path}")
         return name
@@ -420,7 +426,7 @@ class GraphManager:
             'type': 'circle',
             'center': [center_lat, center_lng],
             'radius_miles': radius_miles
-        })
+        }, exclusion_zones)
 
         print(f"Graph saved at: {file_path}")
         return name

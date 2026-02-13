@@ -60,9 +60,9 @@ function App() {
   // Display Options
   const [showArrows, setShowArrows] = useState(true);
   const [showCentroids, setShowCentroids] = useState(false);
-  const [primaryColor, setPrimaryColor] = useState(215); // Default hue (Blue)
-  const [showPathPreview, setShowPathPreview] = useState(true);
-  const [pathPreviewOpacity, setPathPreviewOpacity] = useState(0.4);
+  const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('primaryColor') || '215'); // Default hue (Blue)
+  const [showPathPreview, setShowPathPreview] = useState(false);
+  const [pathPreviewOpacity, setPathPreviewOpacity] = useState(0.5);
   const [showGraphBoundary, setShowGraphBoundary] = useState(false);
   const [exclusionZones, setExclusionZones] = useState([]);
   const [isDrawingExclusion, setIsDrawingExclusion] = useState(false);
@@ -70,6 +70,9 @@ function App() {
   // Update CSS variables when primary color changes
   useEffect(() => {
     const root = document.documentElement;
+    // Assuming primaryColor is a hue value (0-360) or a string that can be parsed as such.
+    // If it's a hex string, this HSL conversion will not work as expected.
+    // For now, we'll assume it's a hue number or a string representation of a hue number.
     root.style.setProperty('--color-primary', `hsl(${primaryColor}, 65%, 50%)`);
     root.style.setProperty('--color-primary-light', `hsl(${primaryColor}, 65%, 90%)`);
     root.style.setProperty('--color-primary-dark', `hsl(${primaryColor}, 65%, 40%)`);
@@ -220,7 +223,8 @@ function App() {
   // Handle drawing complete
   const handleDrawingComplete = useCallback((coordinates, tool, exclude) => {
     // If drawing an exclusion zone (Graph Create Mode)
-    if (exclude || isDrawingExclusion) {
+    // Only if explicitly in drawing exclusion mode (set by GraphSelector)
+    if (isDrawingExclusion) {
       if (tool === 'lasso' && coordinates.length > 2) {
         setExclusionZones(prev => [...prev, coordinates]);
         // Keep tool active for multiple zones
@@ -343,13 +347,22 @@ function App() {
         setMode('input');
       }
 
-      // Graph Create Mode: Z to undo last polygon point
-      if ((e.key === 'z' || e.key === 'Z') && mode === 'graphCreate' && graphBounds?.type === 'polygon') {
-        const coords = graphBounds.coordinates;
-        if (coords && coords.length > 0) {
-          const newCoords = coords.slice(0, -1);
-          setGraphBounds({ ...graphBounds, coordinates: newCoords });
+      // Graph Create Mode: Z to undo / remove last exclusion zone
+      if ((e.key === 'z' || e.key === 'Z') && mode === 'graphCreate') {
+        if (exclusionZones && exclusionZones.length > 0) {
+          setExclusionZones(prev => prev.slice(0, -1));
+        } else if (graphBounds?.type === 'polygon') {
+          const coords = graphBounds.coordinates;
+          if (coords && coords.length > 0) {
+            const newCoords = coords.slice(0, -1);
+            setGraphBounds({ ...graphBounds, coordinates: newCoords });
+          }
         }
+      }
+
+      // Graph Create Mode: L to toggle exclusion tool
+      if ((e.key === 'l' || e.key === 'L') && mode === 'graphCreate') {
+        setIsDrawingExclusion(prev => !prev);
       }
 
       // Display Mode Shortcuts
@@ -405,26 +418,18 @@ function App() {
           }
         }
 
-        // d: Hold for Exclude mode
+        // d: Toggle Exclude mode
         if (e.key === 'd' || e.key === 'D') {
-          if (!e.repeat) setIsExcludeMode(true);
+          setIsExcludeMode(prev => !prev);
         }
       }
-    };
-
-    const handleKeyUp = (e) => {
-      if (e.key === 'd' || e.key === 'D') {
-        setIsExcludeMode(false);
-      }
-    };
+    }
 
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [mode, pendingMarker, sendMessage, clearPendingMarker, selectPathSet, setMode, undoLastSelection, genSettings, graphBounds, isCreatingGraph, nextPath, prevPath, activeTool, setActiveTool, setIsExcludeMode, setIsElevationMinimized, pathUndoRef, graphCreateMode, handleCreateGraph]);
+  }, [mode, pendingMarker, sendMessage, clearPendingMarker, selectPathSet, setMode, undoLastSelection, genSettings, graphBounds, isCreatingGraph, nextPath, prevPath, activeTool, setActiveTool, setIsExcludeMode, setIsElevationMinimized, pathUndoRef, graphCreateMode, handleCreateGraph, exclusionZones, setIsDrawingExclusion]);
 
   // Auto-show elevation window when path with elevation data is selected
   // Auto-show elevation window when path with elevation data is selected
@@ -434,6 +439,11 @@ function App() {
     // if the user minimized it.
     // So we just don't do anything here. The window shows if !isElevationMinimized and data exists.
   }, [currentPath]);
+
+  // Persist primary color setting
+  useEffect(() => {
+    localStorage.setItem('primaryColor', primaryColor);
+  }, [primaryColor]);
 
   // Reset graph bounds when switching between box/polygon mode
   useEffect(() => {
@@ -446,8 +456,8 @@ function App() {
     <div className="app">
       <MapView
         mode={mode}
-        activeTool={activeTool}
-        isExcludeMode={isExcludeMode}
+        activeTool={activeTool || (isDrawingExclusion ? 'lasso' : null)}
+        // isExcludeMode passed below merged with isDrawingExclusion
         wsStatus={wsStatus}
         pendingMarker={pendingMarker}
         pathSetMarkers={pathSetMarkers}
@@ -475,8 +485,8 @@ function App() {
 
         // Exclusion / Drawing props
         exclusionZones={exclusionZones}
-        activeTool={activeTool || (isDrawingExclusion ? 'lasso' : null)}
-        isExcludeMode={isDrawingExclusion}
+        // Merge exclude mode logic: True if user toggled exclude mode OR if drawing an exclusion zone
+        isExcludeMode={isExcludeMode || isDrawingExclusion}
       />
 
       <ControlPanel
@@ -500,7 +510,6 @@ function App() {
         onGoToFirst={goToFirst}
         onGoToLast={goToLast}
         hasActivePathSet={!!activePathSetId}
-        activeTool={activeTool}
         setActiveTool={setActiveTool}
         isExcludeMode={isExcludeMode}
         setIsExcludeMode={setIsExcludeMode}

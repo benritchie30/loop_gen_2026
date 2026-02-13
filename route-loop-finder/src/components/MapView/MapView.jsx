@@ -180,7 +180,7 @@ function MapView({
                 {/* Click handler for input mode */}
                 <MapClickHandler mode={mode} onMapClick={onMapClick} />
 
-                {/* Render Exclusion Zones */}
+                {/* Render Exclusion Zones (Currently Drawing) */}
                 {exclusionZones && exclusionZones.map((zone, idx) => (
                     <Polygon
                         key={`exclusion-${idx}`}
@@ -190,6 +190,21 @@ function MapView({
                             fillColor: '#c0392b',
                             fillOpacity: 0.4,
                             weight: 2,
+                            dashArray: '5, 5'
+                        }}
+                    />
+                ))}
+
+                {/* Render Saved Exclusion Zones (from active graph) */}
+                {showGraphBoundary && activeGraph && graphBoundaries[activeGraph]?.exclusion_zones?.map((zone, idx) => (
+                    <Polygon
+                        key={`saved-exclusion-${idx}`}
+                        positions={zone}
+                        pathOptions={{
+                            color: '#c0392b',
+                            fillColor: '#c0392b',
+                            fillOpacity: 0.2, // Lower opacity to distinguish from active drawing
+                            weight: 1,
                             dashArray: '5, 5'
                         }}
                     />
