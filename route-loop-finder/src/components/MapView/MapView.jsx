@@ -43,7 +43,9 @@ function MapView({
     onHover,
     showPathPreview,
     pathPreviewOpacity,
-    showGraphBoundary
+    showGraphBoundary,
+    // Exclusion props
+    exclusionZones
 }) {
     const [activeStyle, setActiveStyle] = useState(() => {
         try {
@@ -177,6 +179,21 @@ function MapView({
 
                 {/* Click handler for input mode */}
                 <MapClickHandler mode={mode} onMapClick={onMapClick} />
+
+                {/* Render Exclusion Zones */}
+                {exclusionZones && exclusionZones.map((zone, idx) => (
+                    <Polygon
+                        key={`exclusion-${idx}`}
+                        positions={zone}
+                        pathOptions={{
+                            color: '#c0392b',
+                            fillColor: '#c0392b',
+                            fillOpacity: 0.4,
+                            weight: 2,
+                            dashArray: '5, 5'
+                        }}
+                    />
+                ))}
 
                 {/* Drawing handler for selection mode */}
                 <DrawingHandler

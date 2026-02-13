@@ -11,7 +11,11 @@ export default function GraphSelector({
     isGraphCreateMode,
     graphCreateMode,
     setGraphCreateMode,
-    graphBounds
+    graphBounds,
+    exclusionZones,
+    setExclusionZones,
+    isDrawingExclusion,
+    setIsDrawingExclusion
 }) {
     // If in creation mode (selecting bounds)
     if (isGraphCreateMode) {
@@ -47,6 +51,28 @@ export default function GraphSelector({
                         <Hexagon size={16} />
                         <span>Poly</span>
                     </button>
+
+                    <div className="separator-vertical" />
+
+                    <button
+                        className={`mode-btn exclusion ${isDrawingExclusion ? 'active' : ''}`}
+                        onClick={() => setIsDrawingExclusion(!isDrawingExclusion)}
+                        title="Draw Exclusion Zone (Lasso)"
+                    >
+                        <X size={16} />
+                        <span>Exclude</span>
+                    </button>
+
+                    {exclusionZones && exclusionZones.length > 0 && (
+                        <button
+                            className="mode-btn danger"
+                            onClick={() => setExclusionZones([])}
+                            title="Clear Exclusions"
+                        >
+                            <X size={14} />
+                            <span>Clear ({exclusionZones.length})</span>
+                        </button>
+                    )}
                 </div>
 
                 <div className="graph-create-status">

@@ -64,6 +64,8 @@ function App() {
   const [showPathPreview, setShowPathPreview] = useState(true);
   const [pathPreviewOpacity, setPathPreviewOpacity] = useState(0.4);
   const [showGraphBoundary, setShowGraphBoundary] = useState(false);
+  const [exclusionZones, setExclusionZones] = useState([]);
+  const [isDrawingExclusion, setIsDrawingExclusion] = useState(false);
 
   // Update CSS variables when primary color changes
   useEffect(() => {
@@ -217,6 +219,15 @@ function App() {
 
   // Handle drawing complete
   const handleDrawingComplete = useCallback((coordinates, tool, exclude) => {
+    // If drawing an exclusion zone (Graph Create Mode)
+    if (exclude || isDrawingExclusion) {
+      if (tool === 'lasso' && coordinates.length > 2) {
+        setExclusionZones(prev => [...prev, coordinates]);
+        // Keep tool active for multiple zones
+      }
+      return;
+    }
+
     const context = { type: exclude ? 'exclude' : 'include', coordinates, tool };
     pendingRequests.current.push(context);
 
@@ -226,7 +237,7 @@ function App() {
       sendMessage('GET_NODES_IN_REGION', { coordinates });
       setActiveTool(null);
     }
-  }, [sendMessage, setActiveTool]);
+  }, [sendMessage, setActiveTool, isDrawingExclusion]);
 
   // Graph management handlers
   const handleSwitchGraph = useCallback((name) => {
@@ -263,17 +274,55 @@ function App() {
     localStorage.setItem('generatorSettings', JSON.stringify(genSettings));
   }, [genSettings]);
 
-  // Handle Keyboard Shortcuts
+
+
+  // Define handleCreateGraph
+  const handleCreateGraph = useCallback(() => {
+    if (!graphBounds) return;
+
+    // Validate polygon has enough points
+    if (graphBounds.type === 'polygon' && (!graphBounds.coordinates || graphBounds.coordinates.length < 3)) {
+      return;
+    }
+
+    const name = window.prompt('Enter a name for the new graph:');
+    if (name && name.trim()) {
+      const payload = {
+        name: name.trim(),
+        boundary_type: graphBounds.type,
+        exclusion_zones: exclusionZones // Add exclusion zones
+      };
+
+      if (graphBounds.type === 'polygon') {
+        payload.coordinates = graphBounds.coordinates;
+      } else if (graphBounds.type === 'circle') {
+        payload.center_lat = graphBounds.center.lat;
+        payload.center_lng = graphBounds.center.lng;
+        payload.radius_miles = graphBounds.radiusMiles;
+      } else {
+        // Box
+        const { nw, se } = graphBounds;
+        payload.south = se.lat;
+        payload.west = nw.lng;
+        payload.north = nw.lat;
+        payload.east = se.lng;
+      }
+
+      sendMessage('CREATE_GRAPH', payload);
+    }
+  }, [graphBounds, exclusionZones, sendMessage]);
+
+  // Keyboard Shortcuts Effect - Updated to use handleCreateGraph
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Input Mode: Enter to start generation
       if (e.key === 'Enter' && mode === 'input' && pendingMarker) {
+        // ... existing input mode logic ...
         sendMessage('START_GENERATION', {
           lat: pendingMarker.lat,
           lng: pendingMarker.lng,
           ...genSettings
         });
-
         localStorage.setItem('lastMapPosition', JSON.stringify({
           center: [pendingMarker.lat, pendingMarker.lng],
           zoom: 13
@@ -282,39 +331,11 @@ function App() {
 
       // Graph Create Mode: Enter to create graph
       if (e.key === 'Enter' && mode === 'graphCreate' && graphBounds && !isCreatingGraph) {
-        // Validate polygon has enough points
-        if (graphBounds.type === 'polygon' && (!graphBounds.coordinates || graphBounds.coordinates.length < 3)) {
-          return;
-        }
-        const name = window.prompt('Enter a name for the new graph:');
-        if (name && name.trim()) {
-          if (graphBounds.type === 'polygon') {
-            sendMessage('CREATE_GRAPH', {
-              name: name.trim(),
-              boundary_type: 'polygon',
-              coordinates: graphBounds.coordinates
-            });
-          } else if (graphBounds.type === 'circle') {
-            sendMessage('CREATE_GRAPH', {
-              name: name.trim(),
-              boundary_type: 'circle',
-              center_lat: graphBounds.center.lat,
-              center_lng: graphBounds.center.lng,
-              radius_miles: graphBounds.radiusMiles
-            });
-          } else {
-            const { nw, se } = graphBounds;
-            sendMessage('CREATE_GRAPH', {
-              name: name.trim(),
-              boundary_type: 'box',
-              north: nw.lat,
-              west: nw.lng,
-              south: se.lat,
-              east: se.lng
-            });
-          }
-        }
+        handleCreateGraph();
       }
+
+      // ... rest of key handlers ...
+
 
       // Graph Create Mode: Escape or Backspace to cancel
       if ((e.key === 'Escape' || e.key === 'Backspace') && mode === 'graphCreate') {
@@ -403,7 +424,7 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [mode, pendingMarker, sendMessage, clearPendingMarker, selectPathSet, setMode, undoLastSelection, genSettings, graphBounds, isCreatingGraph, nextPath, prevPath, activeTool, setActiveTool, setIsExcludeMode, setIsElevationMinimized, pathUndoRef, graphCreateMode]);
+  }, [mode, pendingMarker, sendMessage, clearPendingMarker, selectPathSet, setMode, undoLastSelection, genSettings, graphBounds, isCreatingGraph, nextPath, prevPath, activeTool, setActiveTool, setIsExcludeMode, setIsElevationMinimized, pathUndoRef, graphCreateMode, handleCreateGraph]);
 
   // Auto-show elevation window when path with elevation data is selected
   // Auto-show elevation window when path with elevation data is selected
@@ -448,10 +469,14 @@ function App() {
         primaryColor={primaryColor}
         hoveredPoint={hoveredPoint}
         onHover={setHoveredPoint}
-        onHover={setHoveredPoint}
         showPathPreview={showPathPreview}
         pathPreviewOpacity={pathPreviewOpacity}
         showGraphBoundary={showGraphBoundary}
+
+        // Exclusion / Drawing props
+        exclusionZones={exclusionZones}
+        activeTool={activeTool || (isDrawingExclusion ? 'lasso' : null)}
+        isExcludeMode={isDrawingExclusion}
       />
 
       <ControlPanel
@@ -486,10 +511,18 @@ function App() {
         activeGraph={activeGraph}
         onSwitchGraph={handleSwitchGraph}
         onStartGraphCreate={handleStartGraphCreate}
-        isCreatingGraph={isCreatingGraph}
+        // Graph Create Props
+        isGraphCreateMode={mode === 'graphCreate'}
         graphCreateMode={graphCreateMode}
         setGraphCreateMode={setGraphCreateMode}
         graphBounds={graphBounds}
+        onCreateGraph={handleCreateGraph}
+        isCreatingGraph={isCreatingGraph}
+        // Exclusion props
+        exclusionZones={exclusionZones}
+        setExclusionZones={setExclusionZones}
+        isDrawingExclusion={isDrawingExclusion}
+        setIsDrawingExclusion={setIsDrawingExclusion}
         showArrows={showArrows}
         setShowArrows={setShowArrows}
         showPathPreview={showPathPreview}

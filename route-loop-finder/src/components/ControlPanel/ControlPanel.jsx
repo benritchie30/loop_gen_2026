@@ -57,6 +57,11 @@ function ControlPanel({
     setShowCentroids,
     showGraphBoundary,
     setShowGraphBoundary,
+    // Exclusion props
+    exclusionZones,
+    setExclusionZones,
+    isDrawingExclusion,
+    setIsDrawingExclusion,
     primaryColor,
     setPrimaryColor
 }) {
@@ -176,6 +181,11 @@ function ControlPanel({
                                 graphCreateMode={graphCreateMode}
                                 setGraphCreateMode={setGraphCreateMode}
                                 graphBounds={graphBounds}
+                                // Exclusion props
+                                exclusionZones={exclusionZones}
+                                setExclusionZones={setExclusionZones}
+                                isDrawingExclusion={isDrawingExclusion}
+                                setIsDrawingExclusion={setIsDrawingExclusion}
                             />
                         </div>
                     )}

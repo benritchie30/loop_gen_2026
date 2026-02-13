@@ -267,8 +267,48 @@ class GraphManager:
         mapping = {old_id: new_id for new_id, old_id in enumerate(G.nodes)}
         return nx.relabel_nodes(G, mapping)
 
+    def _apply_exclusions(self, G, exclusion_zones):
+        """Removes nodes/edges that fall within exclusion polygons."""
+        if not exclusion_zones:
+            return G
+
+        print(f"Applying {len(exclusion_zones)} exclusion zones...")
+        initial_nodes = len(G.nodes)
+        
+        # Convert exclusion zones (list of list of [lat, lng]) to Shapely Polygons
+        polygons = []
+        for zone in exclusion_zones:
+            # Swap to (lng, lat) for Shapely
+            poly_coords = [(lng, lat) for lat, lng in zone]
+            if len(poly_coords) >= 3:
+                polygons.append(Polygon(poly_coords))
+        
+        if not polygons:
+            return G
+
+        # Identify nodes to remove
+        nodes_to_remove = set()
+        for node, data in G.nodes(data=True):
+            # Check against all polygons
+            pt = Point(data['x'], data['y'])
+            for poly in polygons:
+                if poly.contains(pt):
+                    nodes_to_remove.add(node)
+                    break
+        
+        if nodes_to_remove:
+            G.remove_nodes_from(nodes_to_remove)
+            print(f"Removed {len(nodes_to_remove)} nodes based on exclusion zones.")
+            
+        # Clean up isolated nodes if any (OSMnx usually handles this but good to be safe)
+        # G = ox.utils_graph.remove_isolated_nodes(G)
+        
+        print(f"Graph filtered: {initial_nodes} -> {len(G.nodes)} nodes.")
+        return G
+
     def generate_graph(self, name: str, south: float, west: float, north: float, east: float,
-                       custom_filter: str = '["highway"~"trunk|primary|secondary|tertiary"]'):
+                       custom_filter: str = '["highway"~"trunk|primary|secondary|tertiary"]',
+                       exclusion_zones: list = None):
         """Downloads, processes, and saves a new graph from OSMnx using bounding box."""
         if self._graphs_dir is None:
             raise ValueError("Graphs directory not set.")
@@ -280,9 +320,11 @@ class GraphManager:
             custom_filter=custom_filter
         )
 
+        G = self._apply_exclusions(G, exclusion_zones)
         self._update_edge_names(G)
         G = self._relabel_graph(G)
         self._add_elevation_data(G)
+
 
         os.makedirs(self._graphs_dir, exist_ok=True)
         file_path = os.path.join(self._graphs_dir, f"{name}.gpickle")
@@ -299,7 +341,8 @@ class GraphManager:
         return name
 
     def generate_graph_from_polygon(self, name: str, coordinates: list,
-                                     custom_filter: str = '["highway"~"trunk|primary|secondary|tertiary"]'):
+                                     custom_filter: str = '["highway"~"trunk|primary|secondary|tertiary"]',
+                                     exclusion_zones: list = None):
         """Downloads, processes, and saves a new graph from OSMnx using polygon boundary.
         coordinates: list of [lat, lng] pairs."""
         if self._graphs_dir is None:
@@ -315,6 +358,7 @@ class GraphManager:
             custom_filter=custom_filter
         )
 
+        G = self._apply_exclusions(G, exclusion_zones)
         self._update_edge_names(G)
         G = self._relabel_graph(G)
         self._add_elevation_data(G)
@@ -335,7 +379,8 @@ class GraphManager:
 
     def generate_graph_from_circle(self, name: str, center_lat: float, center_lng: float,
                                     radius_miles: float,
-                                    custom_filter: str = '["highway"~"trunk|primary|secondary|tertiary"]'):
+                                    custom_filter: str = '["highway"~"trunk|primary|secondary|tertiary"]',
+                                    exclusion_zones: list = None):
         """Downloads, processes, and saves a new graph from a circular boundary.
         radius_miles: radius in miles."""
         if self._graphs_dir is None:
@@ -360,6 +405,7 @@ class GraphManager:
             custom_filter=custom_filter
         )
 
+        G = self._apply_exclusions(G, exclusion_zones)
         self._update_edge_names(G)
         G = self._relabel_graph(G)
         self._add_elevation_data(G)

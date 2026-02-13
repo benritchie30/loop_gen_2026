@@ -87,7 +87,10 @@ async def handle_create_graph(websocket, data):
     """Create a new graph from bounding box or polygon coordinates."""
     name = data.get("name")
     boundary_type = data.get("boundary_type", "box")
+    name = data.get("name")
+    boundary_type = data.get("boundary_type", "box")
     custom_filter = data.get("filter", '["highway"~"trunk|primary|secondary|tertiary"]')
+    exclusion_zones = data.get("exclusion_zones", [])
 
     if not name:
         await websocket.send(json.dumps({
@@ -138,17 +141,17 @@ async def handle_create_graph(websocket, data):
         if boundary_type == "polygon":
             await loop.run_in_executor(
                 None,
-                lambda: gm.generate_graph_from_polygon(name, coordinates, custom_filter)
+                lambda: gm.generate_graph_from_polygon(name, coordinates, custom_filter, exclusion_zones)
             )
         elif boundary_type == "circle":
             await loop.run_in_executor(
                 None,
-                lambda: gm.generate_graph_from_circle(name, center_lat, center_lng, radius_miles, custom_filter)
+                lambda: gm.generate_graph_from_circle(name, center_lat, center_lng, radius_miles, custom_filter, exclusion_zones)
             )
         else:
             await loop.run_in_executor(
                 None,
-                lambda: gm.generate_graph(name, south, west, north, east, custom_filter)
+                lambda: gm.generate_graph(name, south, west, north, east, custom_filter, exclusion_zones)
             )
 
         # Load the newly created graph
