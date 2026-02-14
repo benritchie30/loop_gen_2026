@@ -8,6 +8,7 @@ import matplotlib.colors as mcolors
 from matplotlib.lines import Line2D
 from collections import Counter
 import numpy as np
+from shapely.geometry import LineString, MultiLineString
 
 # Configuration
 DEFAULT_GRAPH_PATH = 'graphs/asheville_test_small.gpickle'
@@ -29,11 +30,11 @@ def get_graph(path):
     print(f"Loaded graph from {path} with {len(G.nodes)} nodes and {len(G.edges)} edges.")
     return G
 
-def download_test_graph_bbox(north, south, east, west, name, network_type='all'):
-    """Downloads a graph from a bounding box and saves it."""
+def download_test_graph_bbox(north, south, east, west, name, network_type='all', **kwargs):
+    """Downloads a graph from a bounding box and saves it. Accepts **kwargs for ox.graph_from_bbox."""
     print(f"Downloading graph '{name}' from bbox [N:{north}, S:{south}, E:{east}, W:{west}]...")
     try:
-        G = ox.graph_from_bbox(bbox=(north, south, east, west), network_type=network_type)
+        G = ox.graph_from_bbox(bbox=(north, south, east, west), network_type=network_type, **kwargs)
     except Exception as e:
         print(f"Error downloading graph: {e}")
         return None
@@ -248,6 +249,68 @@ def plot_graph_colored_by_attribute(G, attribute):
     plt.tight_layout()
     plt.show()
 
+def simplify_topology(G):
+    """
+    Simplifies the graph topology by removing interstitial nodes (nodes with degree 2).
+    This merges edges incident to such nodes into a single edge, summing length and merging geometry.
+    
+    AGGRESSIVE STRATEGY:
+    Standard ox.simplify_graph() keeps nodes if edge attributes (like speed, name) change.
+    To force simplification, we first STRIP all non-essential attributes from edges.
+    """
+    print(f"Simplifying graph topology (initial nodes: {len(G.nodes)})...")
+    
+    # 1. Strip non-essential attributes to allow merging
+    print("Stripping edge attributes to force simplification...")
+    # Attributes to KEEP (essential for routing/visualization)
+    # 'highway' is needed for filtering/coloring
+    # 'length' is needed for routing weight
+    # 'geometry' is needed for shape
+    # 'oneway' is needed for directionality
+    keep_attrs = {'highway', 'length', 'geometry', 'oneway', 'reversed'}
+    
+    for u, v, k, data in G.edges(keys=True, data=True):
+        keys_to_remove = [key for key in data.keys() if key not in keep_attrs]
+        for key in keys_to_remove:
+            del data[key]
+            
+        # Sanitize remaining attributes (convert lists to tuples/strings to make them hashable)
+        for key in data.keys():
+            val = data[key]
+            if isinstance(val, list):
+                # Convert list to tuple to be hashable (or string)
+                data[key] = tuple(val)
+            
+    # 2. Reset simplification flag to force re-run
+    # osmnx skips simplification if G.graph.get("simplified") is True.
+    if "simplified" in G.graph:
+        G.graph["simplified"] = False
+
+    # 3. Run standard simplification
+    try:
+        # strict=True is default in newer osmnx/consolidated.
+        # We rely on the fact that now attributes match, so it WILL merge.
+        G = ox.simplify_graph(G)
+    except Exception as e:
+        print(f"Simplification failed: {e}")
+    
+    print(f"Graph simplified. Nodes: {len(G.nodes)}, Edges: {len(G.edges)}")
+    return G
+
+def print_unique_edge_attributes(G):
+    """Prints all unique attribute keys found in the graph edges."""
+    print("\n--- Unique Edge Attributes ---")
+    unique_keys = set()
+    for u, v, k, data in G.edges(keys=True, data=True):
+        unique_keys.update(data.keys())
+    
+    sorted_keys = sorted(list(unique_keys))
+    print(f"Found {len(sorted_keys)} unique attributes: {sorted_keys}")
+    
+    # Optional: Print a few examples if useful
+    # for key in sorted_keys:
+    #     print(f"  {key}")
+
 if __name__ == "__main__":
     
     print("WARNING: Make sure to run this script in an environment with osmnx, networkx, matplotlib installed.")
@@ -266,20 +329,29 @@ if __name__ == "__main__":
         print(f"Using existing graph at {saved_path}")
     else:
         # Download logic defined previously
+        print("Downloading graph...")
         lats = [35.59560242663153, 35.639643142853984]
         lngs = [-82.53539085388185, -82.57435798645021]
         north = max(lats); south = min(lats); east = max(lngs); west = min(lngs)
-        saved_path = download_test_graph_bbox(north, south, east, west, graph_name, network_type='all')
+        saved_path = download_test_graph_bbox(
+            north, south, east, west, graph_name, 
+            simplify=True, 
+            custom_filter='["highway"~"cycleway|path|primary|secondary|tertiary|residential|primary_link|secondary_link|tertiary_link|road|living_street|bridleway|path"]'
+        )
     
     G = get_graph(saved_path)
     
     if G:
         print(f"Successfully loaded {len(G.nodes)} nodes.")
         
-        # 2. Filter: Keep ONLY edges with 'highway' attr
-        G = filter_keep_only_attribute(G, 'highway')
+        # Print attributes to see what we're working with
+        print_unique_edge_attributes(G)
         
-        # 3. Filter: Keep only ALLOWED highway types
+        # 2. Filter: Keep ONLY edges with 'highway' attr
+        # G = filter_keep_only_attribute(G, 'highway')
+        
+        # 3. Filter: Keep only ALLOWED highway types (handled by custom_filter during download now, but kept as safety check/cleanup for loaded graphs)
+        # If downloaded with custom_filter, these loops should find nothing to remove.
         target_types = {
              'cycleway', 'path', 
              'primary', 'secondary', 'tertiary', 'residential',
@@ -287,7 +359,7 @@ if __name__ == "__main__":
              'road', 'living_street', 'bridleway', 'path'
         }
         
-        print(f"\n--- Filtering to keep ONLY allowed highway types: {target_types} ---")
+        print(f"\n--- Verifying allowed highway types: {target_types} ---")
         edges_to_remove = []
         for u, v, k, data in G.edges(keys=True, data=True):
             hw = data.get('highway')
@@ -306,52 +378,30 @@ if __name__ == "__main__":
         if edges_to_remove:
             G.remove_edges_from(edges_to_remove)
             print(f"Removed {len(edges_to_remove)} edges due to disallowed highway type.")
+        else:
+            print("All edges conform to allowed highway types.")
             
         # 4. Remove Self Loops (Tiny loops connecting back to same node)
         G = remove_self_loops(G)
+
         
-        # 5. Remove Dead Ends
-        # Pruning is usually best done after filtering since filtering breaks connectivity
+        # 6. Remove Dead Ends
         G = remove_dead_ends(G)
-        G = remove_self_loops(G)
-        # Use simple cleaning? User commented out isolated node removal, but dead_end removal handles some.
-        # We respect user choice to comment out isolated removal if they want.
+        ox.plot_graph(G)
+
+        G.remove_nodes_from(list(nx.isolates(G)))
+        print(f"Removed isolated nodes.")
+        print("\n--- Simplifying Topology (Merging degree-2 nodes) ---")
+
+        G = simplify_topology(G)
+
         print(f"Final Graph has {len(G.nodes)} nodes and {len(G.edges)} edges.")
-        
-        # 6. Inspection of specific suspicious node
-        print("\n--- Inspecting suspicious node at 35.630199, -82.561001 ---")
-        target_lat = 35.630199
-        target_lng = -82.561001
-        
-        try:
-            target_node = ox.nearest_nodes(G, target_lng, target_lat)
-            print(f"Nearest node ID: {target_node}")
-            
-            # Check outgoing edges
-            print("Outgoing edges:")
-            for u, v, k, data in G.out_edges(target_node, keys=True, data=True):
-                print(f"  -> to {v} (key={k}): {data.get('highway')} (len: {data.get('length')})")
-                
-            # Check incoming edges
-            print("Incoming edges:")
-            for u, v, k, data in G.in_edges(target_node, keys=True, data=True):
-                 print(f"  <- from {u} (key={k}): {data.get('highway')} (len: {data.get('length')})")
-
-            ox.plot_graph_route(G, route=[target_node])
-            n = target_node.neighbors()
-            print(n)
-            
-
-        except Exception as e:
-            print(f"Could not inspect node: {e}")
-
-
-
-
-        # 7. Plot
+        ox.plot_graph(G)
+        # 8. Plot
         try:
             plot_graph_colored_by_attribute(G, 'highway')
         except Exception as e:
             print(f"Could not plot: {e}")
+
 
 
