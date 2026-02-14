@@ -96,7 +96,7 @@ def remove_self_loops(G):
         print(f"Removed {len(edges_to_remove)} self-loop edges.")
     else:
         print("No self-loops found.")
-    return G
+    return G, len(edges_to_remove)
 
 def filter_keep_only_attribute(G, attribute):
     """
@@ -253,48 +253,69 @@ def simplify_topology(G):
     """
     Simplifies the graph topology by removing interstitial nodes (nodes with degree 2).
     This merges edges incident to such nodes into a single edge, summing length and merging geometry.
-    
-    AGGRESSIVE STRATEGY:
-    Standard ox.simplify_graph() keeps nodes if edge attributes (like speed, name) change.
-    To force simplification, we first STRIP all non-essential attributes from edges.
     """
     print(f"Simplifying graph topology (initial nodes: {len(G.nodes)})...")
     
-    # 1. Strip non-essential attributes to allow merging
-    print("Stripping edge attributes to force simplification...")
-    # Attributes to KEEP (essential for routing/visualization)
-    # 'highway' is needed for filtering/coloring
-    # 'length' is needed for routing weight
-    # 'geometry' is needed for shape
-    # 'oneway' is needed for directionality
-    keep_attrs = {'highway', 'length', 'geometry', 'oneway', 'reversed'}
-    
+    # 1. Sanitize attributes (convert lists to tuples to prevent unhashable errors)
+    # We DO NOT strip attributes anymore per user request, but checks are needed for safety.
     for u, v, k, data in G.edges(keys=True, data=True):
-        keys_to_remove = [key for key in data.keys() if key not in keep_attrs]
-        for key in keys_to_remove:
-            del data[key]
-            
-        # Sanitize remaining attributes (convert lists to tuples/strings to make them hashable)
         for key in data.keys():
             val = data[key]
             if isinstance(val, list):
-                # Convert list to tuple to be hashable (or string)
                 data[key] = tuple(val)
             
     # 2. Reset simplification flag to force re-run
-    # osmnx skips simplification if G.graph.get("simplified") is True.
     if "simplified" in G.graph:
         G.graph["simplified"] = False
 
     # 3. Run standard simplification
     try:
-        # strict=True is default in newer osmnx/consolidated.
-        # We rely on the fact that now attributes match, so it WILL merge.
         G = ox.simplify_graph(G)
     except Exception as e:
         print(f"Simplification failed: {e}")
     
     print(f"Graph simplified. Nodes: {len(G.nodes)}, Edges: {len(G.edges)}")
+    return G
+
+def process_graph(G):
+    """
+    Iteratively cleans and simplifies the graph until stable.
+    Cycle: Remove Self Loops -> Remove Dead Ends -> Simplify Topology -> Remove Isolates
+    """
+    # 1. Initial Type Filter (Safety)
+    G = filter_keep_only_attribute(G, 'highway')
+    
+    iteration = 0
+    while True:
+        iteration += 1
+        print(f"\n=== Processing Iteration {iteration} ===")
+        
+        # 1. Remove Self Loops
+        G, loops_removed = remove_self_loops(G)
+        
+        # 2. Remove Dead Ends
+        G = remove_dead_ends(G)
+        
+        # 3. Simplify (Merge 2-degree nodes)
+        G = simplify_topology(G)
+        
+        # 4. Remove Isolates
+        G.remove_nodes_from(list(nx.isolates(G)))
+        
+        print(f"Iteration {iteration} complete. Self-loops removed: {loops_removed}")
+        
+        # Break condition: No self-loops found AND we've run at least once
+        # (Dead ends might still be found, but self-loops are the indicator of a "dirty" graph here?
+        #  Actually, if dead ends were removed, simplification might create new self loops?
+        #  Let's allow loop to continue if ANYTHING was removed, or just rely on the user's "until remove_self_loops stops finding loops" logic.)
+        if loops_removed == 0 and iteration > 1:
+            print("Graph stable (no more self-loops). Stopping.")
+            break
+            
+        if iteration >= 10:
+             print("Max iterations reached. Stopping.")
+             break
+             
     return G
 
 def print_unique_edge_attributes(G):
@@ -347,53 +368,8 @@ if __name__ == "__main__":
         # Print attributes to see what we're working with
         print_unique_edge_attributes(G)
         
-        # 2. Filter: Keep ONLY edges with 'highway' attr
-        # G = filter_keep_only_attribute(G, 'highway')
-        
-        # 3. Filter: Keep only ALLOWED highway types (handled by custom_filter during download now, but kept as safety check/cleanup for loaded graphs)
-        # If downloaded with custom_filter, these loops should find nothing to remove.
-        target_types = {
-             'cycleway', 'path', 
-             'primary', 'secondary', 'tertiary', 'residential',
-             'primary_link', 'secondary_link', 'tertiary_link', 
-             'road', 'living_street', 'bridleway', 'path'
-        }
-        
-        print(f"\n--- Verifying allowed highway types: {target_types} ---")
-        edges_to_remove = []
-        for u, v, k, data in G.edges(keys=True, data=True):
-            hw = data.get('highway')
-            keep = False
-            
-            def is_allowed(t): return t in target_types
-            
-            if isinstance(hw, list):
-                if any(is_allowed(t) for t in hw): keep = True
-            else:
-                if is_allowed(hw): keep = True
-            
-            if not keep:
-                edges_to_remove.append((u, v, k))
-        
-        if edges_to_remove:
-            G.remove_edges_from(edges_to_remove)
-            print(f"Removed {len(edges_to_remove)} edges due to disallowed highway type.")
-        else:
-            print("All edges conform to allowed highway types.")
-            
-        # 4. Remove Self Loops (Tiny loops connecting back to same node)
-        G = remove_self_loops(G)
-
-        
-        # 6. Remove Dead Ends
-        G = remove_dead_ends(G)
-        ox.plot_graph(G)
-
-        G.remove_nodes_from(list(nx.isolates(G)))
-        print(f"Removed isolated nodes.")
-        print("\n--- Simplifying Topology (Merging degree-2 nodes) ---")
-
-        G = simplify_topology(G)
+        # Run the iterative cleaning process
+        G = process_graph(G)
 
         print(f"Final Graph has {len(G.nodes)} nodes and {len(G.edges)} edges.")
         ox.plot_graph(G)
