@@ -1,7 +1,7 @@
 # Route Loop Finder - Project Overview
 
 ## 1. High-Level Summary
-This application is a **Route Loop Finder** designed to generate circular routes (loops) for activities like cycling or running. Users pick a starting location on a map, specify parameters (distance, difficulty), and the system generates varied loop options using OpenStreetMap (OSM) data.
+This application is a **Route Loop Finder** designed to generate circular routes (loops) for activities like cycling or running. Users pick a starting location on a map, specify parameters, and the system generates varied loop options using OpenStreetMap (OSM) data.
 
 ## 2. System Architecture
 
