@@ -16,6 +16,7 @@ The project consists of a **Python Backend** handling heavy graph processing and
         *   Spatial queries (nearest node, nodes in polygon).
         *   SRTM Elevation data fetching.
     *   `loop_generator.py`: Contains the core algorithmic logic (`find_paths`) to discover loops on the graph.
+    *   `test_playground/`: Directory for experimental scripts and graph testing.
 *   **Data Storage**:
     *   Graphs are stored as serialized Python objects (`.gpickle`) in `backend/graphs/`.
     *   Metadata (boundaries) are stored as `.boundary.json` sidecar files.

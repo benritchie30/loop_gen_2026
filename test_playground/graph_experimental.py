@@ -8,10 +8,14 @@ import matplotlib.colors as mcolors
 from matplotlib.lines import Line2D
 from collections import Counter
 import numpy as np
+import heapq
 from shapely.geometry import Point, LineString, MultiLineString
+import sys
+# Add project root to sys.path to allow importing from backend
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from backend.loop_generator import weight_function_turns_dist, PathNode
 
 # Configuration
-DEFAULT_GRAPH_PATH = 'graphs/asheville_test_small.gpickle'
 
 def get_graph(path):
     if not os.path.exists(path):
@@ -172,21 +176,24 @@ def remove_dead_ends_v3(G):
         
 
         if len(neigbors) == 1:
-                    curr = intermediate_node
-                    last = None
-                    while len(neigbors) == 1:
-                        if last:
-                            # ox.plot_graph_route(G, [last])
-                            G.remove_node(last)
-                        neigbors = list(G.neighbors(curr))
-                        last = curr
-                        curr = neigbors[0]
-                        intermediate_nodes.append(curr)
+            curr = intermediate_node
+            last = None
+            while len(neigbors) == 1:
+                if last:
+                    # ox.plot_graph_route(G, [last])
+                    G.remove_node(last)
+                neigbors = list(G.neighbors(curr))
+                if len(neigbors) != 1:
+                    break
+                last = curr
+                curr = neigbors[0]
+            intermediate_nodes.append(curr)
         elif len(neigbors) == 2:
 
             edges_merged_success = remove_node_and_merge(G, neigbors[0], intermediate_node, neigbors[1])
         else:
             print("outlier")
+            ox.plot_graph_route(G, [intermediate_node], route_color='g')
             print(neigbors)
     # dead_end_nodes = [n for n, d in G_undir.degree() if d == 1]
         
@@ -359,102 +366,80 @@ def plot_graph_colored_by_attribute(G, attribute):
     plt.tight_layout()
     plt.show()
 
-def custom_simplify_topology(G):
+
+
+def keep_shortest_edge(G):
     """
-    Simplifies the graph by merging edges at nodes with degree 2 (1 in, 1 out).
-    Preserves geometry by concatenating LineStrings.
+    Simplifies the graph in-place by keeping only the shortest edge
+    between any two nodes in a MultiDiGraph.
     """
-    print("Running Custom Simplification...")
-    
-    # We iterate until no more nodes are removed in a pass
-    nodes_removed_count = 0
-    
-    # Work on a snapshot of nodes. 
-    # Modifications in the loop are reflected in G immediately.
-    # We re-check degrees inside the loop to ensure strict correctness.
-    for n in list(G.nodes()):
-        # Check if node still exists (might have been removed if we did complex logic, though here we only remove n)
-        if not G.has_node(n):
-            continue
-            
-        # Strict Degree 2 Check: 1 In, 1 Out
-        neigbors = list(G.neighbors(n))
+    print(f"\n--- Keeping only shortest edges (In-Place) ---")
+    initial_edge_count = len(G.edges)
+    edges_to_remove = []
 
-
-        if len(neigbors)== 2:
-            neigbors = list(G.neighbors(n))
-            u = neigbors[0]
-            v = neigbors[1]
-            # Prevent collapsing self-loops or tiny loops
-            if u == n or v == n or u == v:
-                continue
+    for u in G.nodes():
+        for v in G[u]:
+            if len(G[u][v]) > 1:
+                # Found multi-edges between u and v
+                min_len = float('inf')
+                best_key = None
                 
-            # Get Edge Data (u -> n)
-            # Handle MultiDiGraph: get_edge_data returns {key: {attrs}}
-            edges_u_n = G.get_edge_data(u, n)
-            if not edges_u_n: continue 
-            key_u = list(edges_u_n.keys())[0] # Take first edge
-            attr_u = edges_u_n[key_u]
-            
-            # Get Edge Data (n -> v)
-            edges_n_v = G.get_edge_data(n, v)
-            if not edges_n_v: continue
-            key_v = list(edges_n_v.keys())[0] # Take first edge
-            attr_v = edges_n_v[key_v]
-    
-            # 1. Merge Geometry
-            geo1 = attr_u.get('geometry')
-            geo2 = attr_v.get('geometry')
-            
-            # Fallback if geometry missing (straight line from point coords)
-            if not geo1:
-                p1 = Point(G.nodes[u]['x'], G.nodes[u]['y'])
-                p2 = Point(G.nodes[n]['x'], G.nodes[n]['y'])
-                geo1 = LineString([p1, p2])
-            if not geo2:
-                p2 = Point(G.nodes[n]['x'], G.nodes[n]['y'])
-                p3 = Point(G.nodes[v]['x'], G.nodes[v]['y'])
-                geo2 = LineString([p2, p3])
+                # Find the shortest edge key
+                for k, data in G[u][v].items():
+                    length = data.get('length', float('inf'))
+                    if length < min_len:
+                        min_len = length
+                        best_key = k
                 
-            # Concatenate Coordinates: coords1 + coords2[1:] (skip duplicate 'n')
-            # shapely coords are list of tuples (x, y)
-            new_coords = list(geo1.coords)[:-1] + list(geo2.coords)
-            new_geometry = LineString(new_coords)
-            
-            # 2. Merge Attributes
-            new_attr = attr_u.copy()
-            new_attr['geometry'] = new_geometry
-            new_attr['length'] = attr_u.get('length', 0) + attr_v.get('length', 0)
-            # 3. Modify Graph
-            # Add new edge u->v
-            G.remove_node(n)
-            G.add_edge(u, v, **new_attr)
-            
-            # Remove intermediate node n
-            # print(neigbors)
-            # ox.plot_graph_routes(G, routes=[[u], [n], [v]], route_colors=['g', 'r', 'b'])
-            
-            
-            nodes_removed_count += 1
-        # elif len(neigbors) == 1:
-            # print("self loop", n, list(G.neighbors(n)))
-            # ox.plot_graph_route(G, route=[n])
+                # Mark all other keys for removal
+                for k in G[u][v]:
+                    if k != best_key:
+                        edges_to_remove.append((u, v, k))
 
-    print(f"  Removed {nodes_removed_count} interstitial nodes")
+    if edges_to_remove:
+        G.remove_edges_from(edges_to_remove)
+        print(f"Removed {len(edges_to_remove)} redundant edges.")
+    else:
+        print("No redundant multi-edges found.")
 
-    print(f"Custom Simplification Complete. Nodes: {len(G.nodes)}, Edges: {len(G.edges)}")
+    print(f"Graph edges reduced from {initial_edge_count} to {len(G.edges)}")
     return G
 
-def process_graph(G):
+def get_nodes_with_edge_attribute_values(G, attribute, values):
     """
-    Iteratively cleans and simplifies the graph until stable.
-    Cycle: Remove Self Loops -> Remove Dead Ends -> Simplify Topology -> Remove Isolates
+    Returns a set of nodes that are part of edges with specific attribute values.
+    Handles both single values and lists of values (common in OSM data).
     """
-    # Projecting the graph does not seeem to fix the edge combining issue
-    # print("Projecting graph to UTM for processing...")
-    # G = ox.project_graph(G)
+    target_nodes = set()
+    print(f"\n--- Finding nodes on edges with {attribute} in {values} ahahahah---")
     
-    # 1. Initial Type Filter (Safety)
+    # Ensure values is a set for faster lookup
+    value_set = set(values)
+    
+    for u, v, k, data in G.edges(keys=True, data=True):
+        if attribute not in data:
+            continue
+            
+        attr_val = data[attribute]
+        # OSMnx can return lists for tags
+        match = False
+        if isinstance(attr_val, list):
+            # Check if any value in the list matches our target values
+            if any(val in value_set for val in attr_val):
+                match = True
+        else:
+            if attr_val in value_set:
+                match = True
+                
+        if match:
+            target_nodes.add(u)
+            target_nodes.add(v)
+            
+    print(f"Found {len(target_nodes)} nodes associated with {attribute}={values}")
+    return target_nodes
+
+def process_graph_old_version(G):
+
     G = filter_keep_only_attribute(G, 'highway')
     
     # 2. Aggressive Attribute Stripping (User Request)
@@ -467,6 +452,8 @@ def process_graph(G):
         for key in keys_to_pop:
             data.pop(key)
     
+    # NEW STEP: Keep only the shortest edge between nodes
+    # G = keep_shortest_edge(G)
     
     remove_self_loops(G)
     remove_dead_ends_v3(G)
@@ -477,6 +464,88 @@ def process_graph(G):
     ox.plot_graph(G)
     
     return G
+
+
+
+
+def simplify_graph_topology(G):
+    """
+    Simplifies the graph's topology by removing all nodes that serve only as 
+    intermediaries between two other nodes (undirected degree = 2), and merges 
+    their incident edges.
+    """
+    print("\n--- Simplifying Topology (Merging degree-2 nodes) ---")
+    initial_nodes = len(G.nodes)
+    
+    nodes_removed = 0
+    while True:
+        # We must recalculate degrees each iteration because merging edges changes topology
+        G_undir = G.to_undirected()
+        
+        # Find all nodes with exactly 2 neighbors in the undirected graph
+        degree_2_nodes = [n for n, d in G_undir.degree() if d == 2]
+        
+        removed_in_this_pass = 0
+        for n in degree_2_nodes:
+            if n not in G: 
+                continue
+                
+            neighbors = list(G_undir.neighbors(n))
+            if len(neighbors) == 2:
+                u, v = neighbors[0], neighbors[1]
+                
+                # Make sure it's not a self-loop situation and both are in the graph
+                if u != v and u in G and v in G:
+                    # remove_node_and_merge requires the sequence u -> n -> v
+                    # Check which way the edges go and pass them in that order
+                    if G.has_edge(u, n) and G.has_edge(n, v):
+                        success = remove_node_and_merge(G, u, n, v)
+                    elif G.has_edge(v, n) and G.has_edge(n, u):
+                        success = remove_node_and_merge(G, v, n, u)
+                    else:
+                        success = False
+                        
+                    if success:
+                        removed_in_this_pass += 1
+                        nodes_removed += 1
+        
+        # If we didn't find any more nodes to merge, we're done
+        if removed_in_this_pass == 0:
+            break
+            
+    print(f"Topology simplified: removed {nodes_removed} intermediate nodes.")
+    print(f"Graph nodes reduced from {initial_nodes} -> {len(G.nodes)}")
+    return G
+
+
+def process_graph(G):
+
+    G = filter_keep_only_attribute(G, 'highway')
+    
+    whitelist = {'geometry', 'length', 'name', 'osmid', 'highway'}
+    for u, v, k, data in G.edges(keys=True, data=True):
+        keys_to_pop = [key for key in list(data.keys()) if key not in whitelist]
+        for key in keys_to_pop:
+            data.pop(key)
+    
+    print(f"Before pruning: {len(G.nodes)} nodes, {len(G.edges)} edges")
+    
+    # 1. Prune dead ends, tiny loops, and keep connectors between large components
+    prune_graph_biconnected(G, min_component_length=3000)
+    ox.plot_graph(G, node_size=0, edge_linewidth=1, bgcolor='white')
+
+    # 2. Remove redundant multi-edges (keep only the shortest edge between intersection pairs)
+    keep_shortest_edge(G)
+    # ox.plot_graph(G, node_size=0, edge_linewidth=1, bgcolor='white', title="After Shortest Edge")
+    
+    # 3. Simplify topology (remove degree-2 non-intersection nodes)
+    simplify_graph_topology(G)
+    ox.plot_graph(G, node_size=15, edge_linewidth=1, bgcolor='white')
+
+    print(f"Final simplified graph: {len(G.nodes)} nodes, {len(G.edges)} edges")
+    
+    return G
+
 
 def print_unique_edge_attributes(G):
     """Prints all unique attribute keys found in the graph edges."""
@@ -492,14 +561,351 @@ def print_unique_edge_attributes(G):
     # for key in sorted_keys:
     #     print(f"  {key}")
 
+def demo_biconnected_components(G, start_node):
+    """
+    Visualizes biconnected components on the graph.
+    
+    A biconnected component is a maximal subgraph where removing ANY single node
+    still leaves the rest connected. This means every pair of nodes in the 
+    component lies on at least one simple cycle (loop) together.
+    
+    Why this solves the pruning problem:
+    - Dead-end roads form "bridges" — edges whose removal disconnects the graph.
+      Nodes only reachable through bridges can never be part of a loop.
+    - Biconnected components are exactly the parts of the graph between bridges.
+    - Any node in a biconnected component with 3+ nodes can participate in a loop.
+    - Tree-like branches (no matter how complex) are automatically excluded.
+    
+    Color coding in the plot:
+    - Each biconnected component with 3+ nodes gets its own color
+    - RED nodes = not part of any loopable component (dead ends, bridges, trees)
+    - GREEN star = start node
+    """
+    print("\n=== Biconnected Components Demo ===")
+    
+    # Convert to undirected for analysis
+    G_undir = G.to_undirected()
+    
+    # Get biconnected components (each is a set of nodes)
+    components = list(nx.biconnected_components(G_undir))
+    
+    # Filter to components with 3+ nodes (need at least 3 for a real loop)
+    loop_components = [c for c in components if len(c) >= 3]
+    bridge_components = [c for c in components if len(c) < 3]
+    
+    print(f"Total biconnected components: {len(components)}")
+    print(f"  Components with loops (3+ nodes): {len(loop_components)}")
+    print(f"  Bridge/dead-end components (<3 nodes): {len(bridge_components)}")
+    
+    # All valid nodes (union of all loop components)
+    valid_nodes = set()
+    for c in loop_components:
+        valid_nodes.update(c)
+    
+    invalid_nodes = set(G.nodes()) - valid_nodes
+    
+    print(f"\nValid nodes (can participate in loops): {len(valid_nodes)}")
+    print(f"Invalid nodes (dead ends/bridges): {len(invalid_nodes)}")
+    print(f"Start node {start_node} is {'VALID' if start_node in valid_nodes else 'INVALID'}")
+    
+    # Sort components by size for display
+    loop_components.sort(key=len, reverse=True)
+    for i, c in enumerate(loop_components[:10]):  # Show top 10
+        contains_start = "★ CONTAINS START" if start_node in c else ""
+        print(f"  Component {i}: {len(c)} nodes {contains_start}")
+    
+    # --- Visualization ---
+    # Assign colors per component
+    n_comps = len(loop_components)
+    if n_comps > 0:
+        cmap_func = cm.get_cmap('tab20', max(n_comps, 1))
+    
+    node_to_color = {}
+    for idx, comp in enumerate(loop_components):
+        color = mcolors.to_hex(cmap_func(idx % 20))
+        for node in comp:
+            node_to_color[node] = color
+    
+    # Node colors: component color for valid, red for invalid
+    node_colors = []
+    node_sizes = []
+    for node in G.nodes():
+        if node == start_node:
+            node_colors.append('#00ff00')  # Green for start
+            node_sizes.append(80)
+        elif node in node_to_color:
+            node_colors.append(node_to_color[node])
+            node_sizes.append(15)
+        else:
+            node_colors.append('#ff0000')  # Red for invalid
+            node_sizes.append(25)
+    
+    # Edge colors: color if both endpoints valid, gray otherwise
+    edge_colors = []
+    for u, v, k in G.edges(keys=True):
+        if u in valid_nodes and v in valid_nodes:
+            # Use the color of u's component
+            edge_colors.append(node_to_color.get(u, '#888888'))
+        else:
+            edge_colors.append('#dddddd')  # Light gray for dead-end edges
+    
+    fig, ax = ox.plot_graph(
+        G,
+        node_color=node_colors,
+        node_size=node_sizes,
+        edge_color=edge_colors,
+        edge_linewidth=1.5,
+        bgcolor='white',
+        show=False,
+        close=False
+    )
+    
+    plt.suptitle(f"Biconnected Components\n"
+                f"{len(valid_nodes)} valid nodes (colored) | "
+                f"{len(invalid_nodes)} invalid nodes (red)", fontsize=10)
+    plt.show()
+
+
+def prune_graph_biconnected(G, min_component_length=500):
+    """
+    Prunes the graph by removing dead-end branches and tiny loop components.
+    
+    Uses the "block-cut tree" to decide what to keep:
+    - Biconnected components (blocks) with total edge length >= min_component_length are "large"
+    - Bridge paths between large blocks are kept (connectors)
+    - Small blocks that sit between two large blocks are kept (connectors)
+    - Dead-end branches and isolated tiny loops are removed
+    
+    Args:
+        G: NetworkX MultiDiGraph (modified in place)
+        min_component_length: Minimum total edge length (meters) for a component to be kept.
+                              Components below this are removed unless they connect two larger ones.
+    
+    Returns:
+        G: The pruned graph (same object, modified in place)
+    """
+    print(f"\n=== Pruning Graph (min_component_length={min_component_length}m) ===")
+    initial_nodes = len(G.nodes)
+    initial_edges = len(G.edges)
+    
+    # 1. Convert to undirected for biconnected component analysis
+    G_undir = G.to_undirected()
+    
+    # 2. Find biconnected components (each is a frozenset of nodes)
+    components = list(nx.biconnected_components(G_undir))
+    print(f"Found {len(components)} biconnected components")
+    
+    # 3. Measure each component by total edge length
+    comp_lengths = []
+    for comp in components:
+        comp_set = set(comp)
+        total_length = 0
+        seen_edges = set()
+        for u in comp_set:
+            for v in G_undir.neighbors(u):
+                if v in comp_set:
+                    edge_pair = (min(u, v), max(u, v))
+                    if edge_pair not in seen_edges:
+                        seen_edges.add(edge_pair)
+                        # MultiGraph: G_undir[u][v] = {key: {attrs}, ...}
+                        edge_dict = G_undir[u][v]
+                        min_length = min(
+                            d.get('length', 0) for d in edge_dict.values()
+                        ) if edge_dict else 0
+                        total_length += min_length
+        comp_lengths.append(total_length)
+    
+    # 4. Build the block-cut tree
+    #    Nodes: blocks (biconnected components) and cut vertices (articulation points)
+    #    Edges: a cut vertex connects to each block it belongs to
+    art_points = set(nx.articulation_points(G_undir))
+    
+    block_cut_tree = nx.Graph()
+    for i, comp in enumerate(components):
+        block_id = f"B{i}"
+        # KEY: A component needs >= 3 nodes to contain a cycle.
+        # 2-node components are ALWAYS bridge edges (dead ends or connectors)
+        # and can never form loops, no matter how long the edge is.
+        is_large = len(comp) >= 3 and comp_lengths[i] >= min_component_length
+        block_cut_tree.add_node(block_id, type='block', index=i,
+                                length=comp_lengths[i], is_large=is_large,
+                                node_count=len(comp))
+        for ap in art_points:
+            if ap in comp:
+                block_cut_tree.add_edge(block_id, ap)
+                block_cut_tree.nodes[ap]['type'] = 'cut_vertex'
+    
+    # 5. Find the minimal subtree spanning all large blocks
+    #    Iterative DFS: marks subtrees that contain at least one large block
+    large_blocks = [n for n in block_cut_tree.nodes()
+                    if block_cut_tree.nodes[n].get('is_large')]
+    
+    print(f"Large components (>= 3 nodes AND >= {min_component_length}m): {len(large_blocks)}")
+    for b in large_blocks:
+        idx = block_cut_tree.nodes[b]['index']
+        print(f"  {b}: {len(components[idx])} nodes, {comp_lengths[idx]:.0f}m total edge length")
+    
+    if not large_blocks:
+        print("WARNING: No components meet the minimum length. Graph would be empty.")
+        print("Consider lowering min_component_length.")
+        return G
+    
+    large_set = set(large_blocks)
+    
+    # Iterative post-order DFS to mark needed subtrees
+    # (avoids Python recursion limit on large graphs)
+    def mark_needed_iterative(root):
+        """Iterative DFS: marks nodes on paths between large blocks."""
+        # First pass: build parent map via BFS
+        parent = {root: None}
+        order = []  # visit order for post-order processing
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            order.append(node)
+            for neighbor in block_cut_tree.neighbors(node):
+                if neighbor not in parent:
+                    parent[neighbor] = node
+                    stack.append(neighbor)
+        
+        # Second pass: post-order (reverse of visit order)
+        needed = {}
+        for node in reversed(order):
+            needed[node] = node in large_set
+            for neighbor in block_cut_tree.neighbors(node):
+                if parent.get(neighbor) == node:  # neighbor is child
+                    if needed.get(neighbor, False):
+                        needed[node] = True
+            if needed[node]:
+                block_cut_tree.nodes[node]['keep'] = True
+    
+    # Handle disconnected block-cut tree (graph may have multiple components)
+    visited_bct = set()
+    for lb in large_blocks:
+        if lb not in visited_bct:
+            # BFS to find all nodes in this tree component
+            tree_component = set(nx.node_connected_component(block_cut_tree, lb))
+            visited_bct.update(tree_component)
+            mark_needed_iterative(lb)
+    
+    # 6. Collect valid nodes from kept blocks and cut vertices
+    valid_nodes = set()
+    kept_blocks = 0
+    pruned_blocks = 0
+    for node in block_cut_tree.nodes():
+        node_data = block_cut_tree.nodes[node]
+        if node_data.get('keep'):
+            if node_data.get('type') == 'block':
+                idx = node_data['index']
+                valid_nodes.update(components[idx])
+                kept_blocks += 1
+            else:  # cut_vertex
+                valid_nodes.add(node)
+        else:
+            if node_data.get('type') == 'block':
+                pruned_blocks += 1
+    
+    print(f"\nBlocks kept: {kept_blocks}, Blocks pruned: {pruned_blocks}")
+    print(f"Valid nodes: {len(valid_nodes)} / {initial_nodes}")
+    
+    # 7. Remove invalid nodes from the directed graph
+    nodes_to_remove = set(G.nodes()) - valid_nodes
+    G.remove_nodes_from(nodes_to_remove)
+    
+    # Also remove any newly isolated nodes
+    isolates = list(nx.isolates(G))
+    if isolates:
+        G.remove_nodes_from(isolates)
+        print(f"Removed {len(isolates)} isolated nodes")
+    
+    print(f"Pruned: {initial_nodes} → {len(G.nodes)} nodes, "
+          f"{initial_edges} → {len(G.edges)} edges")
+    
+    return G
+
+
+
+
+def get_valid_nodes(G, start_node):
+    # important_nodes = get_nodes_with_edge_attribute_values(G, 'highway', {'primary', 'secondary', 'tertiary'})
+    important_nodes = get_nodes_with_edge_attribute_values(G, 'highway', {'primary', 'secondary'})
+    important_nodes = list(important_nodes)
+    disp_imp = [[x] for x in important_nodes]
+    ox.plot_graph_routes(G, disp_imp)
+
+    queue = [((0, 0.0, start_node), PathNode(start_node), 0)]
+    valid_nodes = important_nodes
+    # print(f"Starting loop detection... range {min_path_length}-{max_path_length}m")
+    
+    iters = 0
+    MAX_ITERS = 500000
+    while queue:
+        iters += 1
+        if iters > MAX_ITERS:
+            print(f"Max iterations {MAX_ITERS} reached. Stopping.")
+            break
+            
+        dist, curr_node, visited_mask = heapq.heappop(queue)
+        # ox.plot_graph_route(G, [curr_node.id], route_color='blue')
+        if curr_node.id in valid_nodes:
+            print("curr node in valid nodes")
+            path = curr_node.traverse() 
+            ox.plot_graph_route(G, path, route_color='pink')
+            valid_nodes.update(path)
+            list_valid_nodes = list(valid_nodes)
+            show_valid = [[x] for x in list_valid_nodes]
+            ox.plot_graph_routes(G, show_valid)
+            continue
+        # Detect loops when current node exists in visited mask
+        elif (visited_mask & (1 << curr_node.id)):
+            print("found new path")
+            path_segment, loop_start = curr_node.traverse_to(curr_node.id)
+            if not path_segment or not loop_start:
+                continue
+
+            loop_dist = dist - loop_start.dist
+            if loop_dist < 10:
+                continue
+
+            out_back_section = loop_start.traverse() 
+            path = path_segment + out_back_section
+            ox.plot_graph_route(G, path, route_color='blue')
+            valid_nodes.update(path)
+            list_valid_nodes = list(valid_nodes)
+            show_valid = [[x] for x in list_valid_nodes]
+            ox.plot_graph_routes(G, show_valid)
+            continue
+
+        # Expand to neighbors
+        new_mask = visited_mask | (1 << curr_node.id)
+        
+        for neighbor in G.neighbors(curr_node.id):
+            if neighbor == getattr(curr_node.prev, 'id', None):
+                continue  # Skip immediate backtracking
+
+            # new_dist = weight_function(G, curr_node, neighbor, 0, dist)
+            new_node = PathNode(neighbor, curr_node, new_dist)
+            
+            heapq.heappush(queue, (
+                new_dist,
+                new_node,
+                new_mask
+            ))
+
+    return valid_nodes
+
+
+
+
 if __name__ == "__main__":
     
-    print("WARNING: Make sure to run this script in an environment with osmnx, networkx, matplotlib installed.")
     
     # 1. Download/Load 
     # graph_name = "boone_process_test"
+    # graph_name = "boone_1600"
     # graph_name = "shelby_process_test"
-    graph_name = "Vilas_process_test"
+    graph_name = "avl_1"
+    # graph_name = "Vilas_process_test"
     # graph_name = "v_2_15_test02"
     saved_path = f"graphs/{graph_name}.gpickle" 
     
@@ -517,9 +923,14 @@ if __name__ == "__main__":
         # lat1, lng1 = [36.2158714783487, -81.68045473827847]
         # lat1, lng1 = [36.26642986174743, -81.81297732128627]
         # lat1, lng1 = [35.61861243091474, -82.55423653308036]
-        lat1, lng1 = [36.25389270584704, -81.78986549377443]
+        # lat2, lng2 = [35.626141, -82.550102]
+        # lat1, lng1 = [35.626141, -82.550102]
+        # lat1, lng1 = [36.253080, -81.141820]
+        lat1, lng1 = [36.21955, -81.6806]
 
-        radius = 8000
+
+
+        radius = 16000
         
 
         # saved_path = download_test_graph_bbox(
@@ -540,18 +951,25 @@ if __name__ == "__main__":
         print(f"Successfully loaded {len(G.nodes)} nodes.")
         
         # Print attributes to see what we're working with
-        # print_unique_edge_attributes(G)
+        print_unique_edge_attributes(G)
+        # ox.plot_graph(G)
         
         # Run the iterative cleaning process
         G = process_graph(G)
 
         print(f"Final Graph has {len(G.nodes)} nodes and {len(G.edges)} edges.")
+        
+        # Test specific user request
+        # highway_types = {'primary', 'secondary', 'tertiary'}
+        # important_nodes = get_nodes_with_edge_attribute_values(G, 'highway', highway_types)
+        # print(f"Number of nodes on primary/secondary/tertiary roads: {len(important_nodes)}")
+
         ox.plot_graph(G)
         # 8. Plot
-        try:
-            plot_graph_colored_by_attribute(G, 'name')
-        except Exception as e:
-            print(f"Could not plot: {e}")
+        # try:
+        #     plot_graph_colored_by_attribute(G, 'name')
+        # except Exception as e:
+        #     print(f"Could not plot: {e}")
         # else:
             # print("Graph already processed.")
             # print(len(G.nodes), len(G.edges))
