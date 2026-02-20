@@ -522,7 +522,7 @@ def process_graph(G):
 
     G = filter_keep_only_attribute(G, 'highway')
     
-    whitelist = {'geometry', 'length', 'name', 'osmid', 'highway'}
+    whitelist = {'geometry', 'length', 'name', 'highway'}
     for u, v, k, data in G.edges(keys=True, data=True):
         keys_to_pop = [key for key in list(data.keys()) if key not in whitelist]
         for key in keys_to_pop:
@@ -533,6 +533,24 @@ def process_graph(G):
     # 1. Prune dead ends, tiny loops, and keep connectors between large components
     prune_graph_biconnected(G, min_component_length=3000)
     ox.plot_graph(G, node_size=0, edge_linewidth=1, bgcolor='white')
+
+    # 4. Consolidate complex intersections (divided highways, roundabouts, etc)
+    print("\n--- Consolidating Intersections ---")
+    # Must project to Cartesian coordinates (meters) for spatial clustering
+    G_proj = ox.project_graph(G)
+    
+    # Consolidate intersections within a 15-meter tolerance
+    G_proj_cons = ox.simplification.consolidate_intersections(
+        G_proj,
+        rebuild_graph=True,
+        tolerance=15,
+        dead_ends=False
+    )
+    
+    # Project back to Lat/Lon
+    G = ox.project_graph(G_proj_cons, to_crs='epsg:4326')
+    print(f"After intersection consolidation: {len(G.nodes)} nodes, {len(G.edges)} edges")
+    ox.plot_graph(G, node_size=15, edge_linewidth=1, bgcolor='white')
 
     # 2. Remove redundant multi-edges (keep only the shortest edge between intersection pairs)
     keep_shortest_edge(G)
@@ -904,9 +922,10 @@ if __name__ == "__main__":
     # graph_name = "boone_process_test"
     # graph_name = "boone_1600"
     # graph_name = "shelby_process_test"
-    graph_name = "avl_1"
+    # graph_name = "avl_1"
     # graph_name = "Vilas_process_test"
-    # graph_name = "v_2_15_test02"
+    # graph_name = "Vilas_1600"
+    graph_name = "vilas_1600"
     saved_path = f"graphs/{graph_name}.gpickle" 
     
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -921,12 +940,12 @@ if __name__ == "__main__":
         # Download logic defined previously
         print("Downloading graph...")
         # lat1, lng1 = [36.2158714783487, -81.68045473827847]
-        # lat1, lng1 = [36.26642986174743, -81.81297732128627]
+        lat1, lng1 = [36.26642986174743, -81.81297732128627]
         # lat1, lng1 = [35.61861243091474, -82.55423653308036]
         # lat2, lng2 = [35.626141, -82.550102]
         # lat1, lng1 = [35.626141, -82.550102]
         # lat1, lng1 = [36.253080, -81.141820]
-        lat1, lng1 = [36.21955, -81.6806]
+        # lat1, lng1 = [36.21955, -81.6806]
 
 
 

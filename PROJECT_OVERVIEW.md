@@ -36,7 +36,11 @@ The project consists of a **Python Backend** handling heavy graph processing and
 Before routes can be generated, a "graph" (map network) must exist.
 1.  **Frontend**: User enters "Graph Create Mode", draws a Box, Polygon, or Circle.
 2.  **Message**: `CREATE_GRAPH` sent to backend with coordinates.
-3.  **Backend**: `GraphManager` calls `ox.graph_from_...`, downloads OSM data, cleans it, adds elevation, and saves it to disk.
+3.  **Backend**: `GraphManager` calls `ox.graph_from_...`, downloads OSM data, then runs the simplification pipeline:
+    *   Prunes dead-end branches and tiny loops (biconnected component / block-cut tree analysis).
+    *   Consolidates complex intersections (OSMnx `consolidate_intersections`, 15m tolerance).
+    *   Keeps only shortest edge between node pairs, merges degree-2 intermediate nodes.
+    *   Relabels nodes to sequential integers, adds SRTM elevation, and saves to disk.
 
 ### B. Route Generation
 1.  **Frontend**: User clicks a point on the map.

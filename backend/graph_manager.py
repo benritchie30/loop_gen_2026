@@ -242,19 +242,19 @@ class GraphManager:
         """Cleans up edge names from OSM data."""
         for u, v, data in G.edges(data=True):
             names = []
-            if 'ref' in data:
+            if 'ref' in data and 'name' not in data:
                 ref_value = data['ref']
                 if ';' in ref_value:
                     names.extend(ref_value.split(';'))
                 else:
                     names.append(ref_value)
-            if 'name' in data:
-                if isinstance(data['name'], str):
-                    names.append(data['name'])
-                elif isinstance(data['name'], list):
-                    names.extend(data['name'])
+            # if 'name' in data:
+            #     if isinstance(data['name'], str):
+            #         names.append(data['name'])
+            #     elif isinstance(data['name'], list):
+            #         names.extend(data['name'])
             if len(names) == 0:
-                data['name'] = 'None'
+                data['name'] = None
             elif len(names) == 1:
                 data['name'] = names[0]
             else:
@@ -267,6 +267,240 @@ class GraphManager:
         """Relabels graph nodes to sequential integers starting from 0."""
         mapping = {old_id: new_id for new_id, old_id in enumerate(G.nodes)}
         return nx.relabel_nodes(G, mapping)
+
+    @staticmethod
+    def _remove_node_and_merge(G, u, n, v):
+        """Removes intermediate node n and merges edges u->n and n->v into u->v."""
+        edges_u_n = G.get_edge_data(u, n)
+        if edges_u_n is None:
+            G.remove_node(n)
+            return False
+        attr_u = edges_u_n[list(edges_u_n.keys())[0]]
+
+        edges_n_v = G.get_edge_data(n, v)
+        if edges_n_v is None:
+            G.remove_node(n)
+            return False
+        attr_v = edges_n_v[list(edges_n_v.keys())[0]]
+
+        # Merge geometry
+        geo1 = attr_u.get('geometry')
+        geo2 = attr_v.get('geometry')
+        if not geo1:
+            geo1 = LineString([(G.nodes[u]['x'], G.nodes[u]['y']),
+                               (G.nodes[n]['x'], G.nodes[n]['y'])])
+        if not geo2:
+            geo2 = LineString([(G.nodes[n]['x'], G.nodes[n]['y']),
+                               (G.nodes[v]['x'], G.nodes[v]['y'])])
+
+        coords1 = list(geo1.coords)
+        coords2 = list(geo2.coords)
+        start1, end1 = coords1[0], coords1[-1]
+        start2, end2 = coords2[0], coords2[-1]
+        if start1 == start2:
+            coords1 = coords1[::-1]
+        elif start1 == end2:
+            coords1 = coords1[::-1]
+            coords2 = coords2[::-1]
+        elif end1 == end2:
+            coords2 = coords2[::-1]
+
+        new_attr = attr_u.copy()
+        new_attr['geometry'] = LineString(coords1[:-1] + coords2)
+        new_attr['length'] = attr_u.get('length', 0) + attr_v.get('length', 0)
+
+        G.remove_node(n)
+        G.add_edge(u, v, **new_attr)
+        G.add_edge(v, u, **new_attr)
+        return True
+
+    @staticmethod
+    def _keep_shortest_edge(G):
+        """Keeps only the shortest edge between any pair of nodes in a MultiDiGraph."""
+        edges_to_remove = []
+        for u in G.nodes():
+            for v in G[u]:
+                if len(G[u][v]) > 1:
+                    min_len = float('inf')
+                    best_key = None
+                    for k, data in G[u][v].items():
+                        length = data.get('length', float('inf'))
+                        if length < min_len:
+                            min_len = length
+                            best_key = k
+                    for k in G[u][v]:
+                        if k != best_key:
+                            edges_to_remove.append((u, v, k))
+        if edges_to_remove:
+            G.remove_edges_from(edges_to_remove)
+            print(f"  Removed {len(edges_to_remove)} redundant multi-edges.")
+
+    @staticmethod
+    def _prune_graph_biconnected(G, min_component_length=3000):
+        """Prunes dead-end branches and tiny loops using block-cut tree analysis."""
+        print(f"  Pruning graph (min_component_length={min_component_length}m)...")
+        initial_nodes = len(G.nodes)
+
+        G_undir = G.to_undirected()
+        components = list(nx.biconnected_components(G_undir))
+
+        # Measure each component by total edge length
+        comp_lengths = []
+        for comp in components:
+            comp_set = set(comp)
+            total_length = 0
+            seen_edges = set()
+            for u in comp_set:
+                for v in G_undir.neighbors(u):
+                    if v in comp_set:
+                        edge_pair = (min(u, v), max(u, v))
+                        if edge_pair not in seen_edges:
+                            seen_edges.add(edge_pair)
+                            edge_dict = G_undir[u][v]
+                            min_length = min(
+                                d.get('length', 0) for d in edge_dict.values()
+                            ) if edge_dict else 0
+                            total_length += min_length
+            comp_lengths.append(total_length)
+
+        # Build block-cut tree
+        art_points = set(nx.articulation_points(G_undir))
+        block_cut_tree = nx.Graph()
+        for i, comp in enumerate(components):
+            block_id = f"B{i}"
+            is_large = len(comp) >= 3 and comp_lengths[i] >= min_component_length
+            block_cut_tree.add_node(block_id, type='block', index=i,
+                                    length=comp_lengths[i], is_large=is_large)
+            for ap in art_points:
+                if ap in comp:
+                    block_cut_tree.add_edge(block_id, ap)
+                    block_cut_tree.nodes[ap]['type'] = 'cut_vertex'
+
+        large_blocks = [n for n in block_cut_tree.nodes()
+                        if block_cut_tree.nodes[n].get('is_large')]
+
+        if not large_blocks:
+            print("  WARNING: No large components found. Skipping pruning.")
+            return
+
+        large_set = set(large_blocks)
+
+        # Iterative post-order DFS to mark needed subtrees
+        def mark_needed_iterative(root):
+            parent = {root: None}
+            order = []
+            stack = [root]
+            while stack:
+                node = stack.pop()
+                order.append(node)
+                for neighbor in block_cut_tree.neighbors(node):
+                    if neighbor not in parent:
+                        parent[neighbor] = node
+                        stack.append(neighbor)
+            needed = {}
+            for node in reversed(order):
+                needed[node] = node in large_set
+                for neighbor in block_cut_tree.neighbors(node):
+                    if parent.get(neighbor) == node:
+                        if needed.get(neighbor, False):
+                            needed[node] = True
+                if needed[node]:
+                    block_cut_tree.nodes[node]['keep'] = True
+
+        visited_bct = set()
+        for lb in large_blocks:
+            if lb not in visited_bct:
+                tree_component = set(nx.node_connected_component(block_cut_tree, lb))
+                visited_bct.update(tree_component)
+                mark_needed_iterative(lb)
+
+        # Collect valid nodes
+        valid_nodes = set()
+        for node in block_cut_tree.nodes():
+            node_data = block_cut_tree.nodes[node]
+            if node_data.get('keep'):
+                if node_data.get('type') == 'block':
+                    valid_nodes.update(components[node_data['index']])
+                else:
+                    valid_nodes.add(node)
+
+        nodes_to_remove = set(G.nodes()) - valid_nodes
+        G.remove_nodes_from(nodes_to_remove)
+        isolates = list(nx.isolates(G))
+        if isolates:
+            G.remove_nodes_from(isolates)
+
+        print(f"  Pruned: {initial_nodes} -> {len(G.nodes)} nodes")
+
+    @staticmethod
+    def _simplify_graph_topology(G):
+        """Merges degree-2 intermediate nodes, preserving road geometry."""
+        print("  Simplifying topology (merging degree-2 nodes)...")
+        initial_nodes = len(G.nodes)
+        nodes_removed = 0
+
+        while True:
+            G_undir = G.to_undirected()
+            degree_2_nodes = [n for n, d in G_undir.degree() if d == 2]
+
+            removed_in_this_pass = 0
+            for n in degree_2_nodes:
+                if n not in G:
+                    continue
+                neighbors = list(G_undir.neighbors(n))
+                if len(neighbors) == 2:
+                    u, v = neighbors[0], neighbors[1]
+                    if u != v and u in G and v in G:
+                        if G.has_edge(u, n) and G.has_edge(n, v):
+                            success = GraphManager._remove_node_and_merge(G, u, n, v)
+                        elif G.has_edge(v, n) and G.has_edge(n, u):
+                            success = GraphManager._remove_node_and_merge(G, v, n, u)
+                        else:
+                            success = False
+                        if success:
+                            removed_in_this_pass += 1
+                            nodes_removed += 1
+
+            if removed_in_this_pass == 0:
+                break
+
+        print(f"  Topology simplified: {initial_nodes} -> {len(G.nodes)} nodes ({nodes_removed} removed)")
+
+    @staticmethod
+    def _process_graph(G):
+        """Full graph simplification pipeline: prune, consolidate, simplify."""
+        print(f"\n=== Processing Graph ({len(G.nodes)} nodes, {len(G.edges)} edges) ===")
+
+        # 1. Strip non-essential edge attributes
+        whitelist = {'geometry', 'length', 'name', 'highway', 'osmid'}
+        for u, v, k, data in G.edges(keys=True, data=True):
+            for key in [k for k in list(data.keys()) if k not in whitelist]:
+                data.pop(key)
+
+        # 2. Prune dead ends and tiny loops
+        GraphManager._prune_graph_biconnected(G, min_component_length=3000)
+
+        # 3. Consolidate complex intersections
+        print("  Consolidating intersections...")
+        G_proj = ox.project_graph(G)
+        G_proj_cons = ox.simplification.consolidate_intersections(
+            G_proj, rebuild_graph=True, tolerance=15, dead_ends=False
+        )
+        G = ox.project_graph(G_proj_cons, to_crs='epsg:4326')
+        print(f"  After consolidation: {len(G.nodes)} nodes, {len(G.edges)} edges")
+
+        # 4. Keep only shortest edge between node pairs
+        GraphManager._keep_shortest_edge(G)
+
+        # 5. Merge degree-2 nodes
+        GraphManager._simplify_graph_topology(G)
+
+        # 6. Remove self-loops and isolates
+        G.remove_edges_from(list(nx.selfloop_edges(G)))
+        G.remove_nodes_from(list(nx.isolates(G)))
+
+        print(f"=== Processing complete: {len(G.nodes)} nodes, {len(G.edges)} edges ===\n")
+        return G
 
     def _apply_exclusions(self, G, exclusion_zones):
         """Removes nodes/edges that fall within exclusion polygons."""
@@ -328,6 +562,7 @@ class GraphManager:
         )
         G = self._apply_exclusions(G, exclusion_zones)
         self._update_edge_names(G)
+        G = self._process_graph(G)
         G = self._relabel_graph(G)
         self._add_elevation_data(G)
 
@@ -366,6 +601,7 @@ class GraphManager:
 
         G = self._apply_exclusions(G, exclusion_zones)
         self._update_edge_names(G)
+        G = self._process_graph(G)
         G = self._relabel_graph(G)
         self._add_elevation_data(G)
 
@@ -413,6 +649,7 @@ class GraphManager:
 
         G = self._apply_exclusions(G, exclusion_zones)
         self._update_edge_names(G)
+        G = self._process_graph(G)
         G = self._relabel_graph(G)
         self._add_elevation_data(G)
 
