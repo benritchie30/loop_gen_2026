@@ -44,6 +44,8 @@ function MapView({
     showPathPreview,
     pathPreviewOpacity,
     showGraphBoundary,
+    showGraphNodes,
+    graphNodes,
     // Exclusion props
     exclusionZones
 }) {
@@ -296,6 +298,24 @@ function MapView({
                         radius={activeBoundary.radius_miles * 1609.34}
                         pathOptions={boundaryPreviewStyle}
                     />
+                )}
+
+                {/* Graph Nodes Point Visualization */}
+                {showGraphNodes && graphNodes && graphNodes.length > 0 && (
+                    graphNodes.map((node, i) => (
+                        <Circle
+                            key={`node-${i}`}
+                            center={[node[0], node[1]]}
+                            radius={25}
+                            pathOptions={{
+                                color: '#ff0000',
+                                fillColor: '#ff0000',
+                                fillOpacity: 0.8,
+                                weight: 1
+                            }}
+                            interactive={false}
+                        />
+                    ))
                 )}
             </MapContainer>
         </div>

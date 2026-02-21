@@ -40,6 +40,8 @@ async def handler(websocket):
                     await handle_switch_graph(websocket, data)
                 elif msg_type == "CREATE_GRAPH":
                     await handle_create_graph(websocket, data)
+                elif msg_type == "GET_GRAPH_NODES":
+                    await handle_get_graph_nodes(websocket, data)
                 else:
                     print(f"Unknown message type: {msg_type}")
 
@@ -87,9 +89,7 @@ async def handle_create_graph(websocket, data):
     """Create a new graph from bounding box or polygon coordinates."""
     name = data.get("name")
     boundary_type = data.get("boundary_type", "box")
-    name = data.get("name")
-    boundary_type = data.get("boundary_type", "box")
-    custom_filter = data.get("filter", '["highway"~"trunk|primary|secondary|tertiary"]')
+    # custom_filter = data.get("filter", '["highway"~"trunk|primary|secondary|tertiary"]')
     exclusion_zones = data.get("exclusion_zones", [])
 
     if not name:
@@ -141,17 +141,17 @@ async def handle_create_graph(websocket, data):
         if boundary_type == "polygon":
             await loop.run_in_executor(
                 None,
-                lambda: gm.generate_graph_from_polygon(name, coordinates, custom_filter, exclusion_zones)
+                lambda: gm.generate_graph_from_polygon(name, coordinates, exclusion_zones=exclusion_zones)
             )
         elif boundary_type == "circle":
             await loop.run_in_executor(
                 None,
-                lambda: gm.generate_graph_from_circle(name, center_lat, center_lng, radius_miles, custom_filter, exclusion_zones)
+                lambda: gm.generate_graph_from_circle(name, center_lat, center_lng, radius_miles, exclusion_zones=exclusion_zones)
             )
         else:
             await loop.run_in_executor(
                 None,
-                lambda: gm.generate_graph(name, south, west, north, east, custom_filter, exclusion_zones)
+                lambda: gm.generate_graph(name, south, west, north, east, exclusion_zones=exclusion_zones)
             )
 
         # Load the newly created graph
@@ -274,6 +274,26 @@ async def handle_get_nodes_near_polyline(websocket, data):
         response["edges"] = edges_geojson
     
     await websocket.send(json.dumps(response))
+
+async def handle_get_graph_nodes(websocket, data):
+    """Returns the coordinates of all nodes in the currently active graph."""
+    try:
+        G = gm.get_graph()
+        nodes = []
+        for node, data in G.nodes(data=True):
+            if 'y' in data and 'x' in data:
+                nodes.append([data['y'], data['x']]) # [lat, lng]
+                
+        await websocket.send(json.dumps({
+            "type": "GRAPH_NODES",
+            "nodes": nodes
+        }))
+    except ValueError:
+        # Graph might not be loaded yet
+        await websocket.send(json.dumps({
+            "type": "GRAPH_NODES",
+            "nodes": []
+        }))
 
 async def main():
     print("Initializing GraphManager...")

@@ -472,7 +472,7 @@ class GraphManager:
         print(f"\n=== Processing Graph ({len(G.nodes)} nodes, {len(G.edges)} edges) ===")
 
         # 1. Strip non-essential edge attributes
-        whitelist = {'geometry', 'length', 'name', 'highway', 'osmid'}
+        whitelist = {'geometry', 'length', 'name', 'highway', 'ref'}
         for u, v, k, data in G.edges(keys=True, data=True):
             for key in [k for k in list(data.keys()) if k not in whitelist]:
                 data.pop(key)
@@ -490,13 +490,13 @@ class GraphManager:
         print(f"  After consolidation: {len(G.nodes)} nodes, {len(G.edges)} edges")
 
         # 4. Keep only shortest edge between node pairs
-        GraphManager._keep_shortest_edge(G)
+        # GraphManager._keep_shortest_edge(G)
 
         # 5. Merge degree-2 nodes
         GraphManager._simplify_graph_topology(G)
 
         # 6. Remove self-loops and isolates
-        G.remove_edges_from(list(nx.selfloop_edges(G)))
+        # G.remove_edges_from(list(nx.selfloop_edges(G)))
         G.remove_nodes_from(list(nx.isolates(G)))
 
         print(f"=== Processing complete: {len(G.nodes)} nodes, {len(G.edges)} edges ===\n")
@@ -541,31 +541,16 @@ class GraphManager:
         print(f"Graph filtered: {initial_nodes} -> {len(G.nodes)} nodes.")
         return G
 
-    def generate_graph(self, name: str, south: float, west: float, north: float, east: float,
-                       custom_filter: str = '["highway"~"trunk|primary|secondary|tertiary"]',
-                       exclusion_zones: list = None):
-        """Downloads, processes, and saves a new graph from OSMnx using bounding box."""
+    def _finalize_and_save_graph(self, G, name: str, boundary_metadata: dict, exclusion_zones: list = None):
+        """Helper method to process, attach metadata, and save a generated graph."""
         if self._graphs_dir is None:
             raise ValueError("Graphs directory not set.")
 
-        print(f"Generating graph '{name}' for bbox: S={south}, W={west}, N={north}, E={east}")
-        # G = ox.graph_from_bbox(
-        #     bbox=(north, south, east, west),
-        #     network_type='drive',
-        #     custom_filter=custom_filter
-        # )
-        print("generating with hardcoded test")
-        G = ox.graph_from_bbox(
-            bbox=(north, south, east, west),
-            network_type='all',
-            # custom_filter=custom_filter
-        )
         G = self._apply_exclusions(G, exclusion_zones)
-        self._update_edge_names(G)
         G = self._process_graph(G)
         G = self._relabel_graph(G)
+        self._update_edge_names(G)
         self._add_elevation_data(G)
-
 
         os.makedirs(self._graphs_dir, exist_ok=True)
         file_path = os.path.join(self._graphs_dir, f"{name}.gpickle")
@@ -573,100 +558,78 @@ class GraphManager:
             pickle.dump(G, f, pickle.HIGHEST_PROTOCOL)
 
         # Save boundary metadata
-        self._save_boundary(name, {
-            'type': 'box',
-            'north': north, 'south': south, 'east': east, 'west': west
-        }, exclusion_zones)
+        self._save_boundary(name, boundary_metadata, exclusion_zones)
 
         print(f"Graph saved at: {file_path}")
         return name
 
+    def generate_graph(self, name: str, south: float, west: float, north: float, east: float,
+                       custom_filter: str = '["highway"~"cycleway|path|primary|secondary|tertiary|residential|primary_link|secondary_link|tertiary_link|road|living_street|bridleway|path"]',
+                       exclusion_zones: list = None):
+        """Downloads, processes, and saves a new graph from OSMnx using bounding box."""
+        print(f"Generating graph '{name}' for bbox: S={south}, W={west}, N={north}, E={east}")
+        
+        # OSMnx 1.8+ format: bbox is (left, bottom, right, top) in EPSG:4326
+        G = ox.graph_from_bbox(
+            bbox=(west, south, east, north),
+            network_type='all',
+            simplify=True,
+            custom_filter=custom_filter
+        )
+        
+        boundary_metadata = {
+            'type': 'box',
+            'north': north, 'south': south, 'east': east, 'west': west
+        }
+        return self._finalize_and_save_graph(G, name, boundary_metadata, exclusion_zones)
+
     def generate_graph_from_polygon(self, name: str, coordinates: list,
-                                     custom_filter: str = '["highway"~"trunk|primary|secondary|tertiary"]',
+                                     custom_filter: str = '["highway"~"cycleway|path|primary|secondary|tertiary|residential|primary_link|secondary_link|tertiary_link|road|living_street|bridleway|path"]',
                                      exclusion_zones: list = None):
         """Downloads, processes, and saves a new graph from OSMnx using polygon boundary.
         coordinates: list of [lat, lng] pairs."""
-        if self._graphs_dir is None:
-            raise ValueError("Graphs directory not set.")
-
         # Shapely uses (lng, lat) order
         poly = Polygon([(lng, lat) for lat, lng in coordinates])
         print(f"Generating graph '{name}' from polygon with {len(coordinates)} vertices")
 
         G = ox.graph_from_polygon(
             poly,
-            network_type='drive',
+            network_type='all',
+            simplify=True,
             custom_filter=custom_filter
         )
 
-        G = self._apply_exclusions(G, exclusion_zones)
-        self._update_edge_names(G)
-        G = self._process_graph(G)
-        G = self._relabel_graph(G)
-        self._add_elevation_data(G)
-
-        os.makedirs(self._graphs_dir, exist_ok=True)
-        file_path = os.path.join(self._graphs_dir, f"{name}.gpickle")
-        with open(file_path, 'wb') as f:
-            pickle.dump(G, f, pickle.HIGHEST_PROTOCOL)
-
-        # Save boundary metadata
-        self._save_boundary(name, {
+        boundary_metadata = {
             'type': 'polygon',
             'coordinates': coordinates
-        }, exclusion_zones)
-
-        print(f"Graph saved at: {file_path}")
-        return name
+        }
+        return self._finalize_and_save_graph(G, name, boundary_metadata, exclusion_zones)
 
     def generate_graph_from_circle(self, name: str, center_lat: float, center_lng: float,
                                     radius_miles: float,
-                                    custom_filter: str = '["highway"~"trunk|primary|secondary|tertiary"]',
+                                    custom_filter: str = '["highway"~"cycleway|path|primary|secondary|tertiary|residential|primary_link|secondary_link|tertiary_link|road|living_street|bridleway|path"]',
                                     exclusion_zones: list = None):
         """Downloads, processes, and saves a new graph from a circular boundary.
         radius_miles: radius in miles."""
-        if self._graphs_dir is None:
-            raise ValueError("Graphs directory not set.")
-
-        # Convert miles to approximate degrees (1 degree lat ≈ 69 miles)
-        radius_deg_lat = radius_miles / 69.0
-        radius_deg_lng = radius_miles / (69.0 * abs(math.cos(math.radians(center_lat))))
-        
-        # Create elliptical polygon to account for lat/lng distortion
-        center = Point(center_lng, center_lat)
-        # Use affine scaling to make a proper circle in geographic coords
-        circle = center.buffer(1, resolution=64)
-        from shapely.affinity import scale
-        circle = scale(circle, xfact=radius_deg_lng, yfact=radius_deg_lat)
-
         print(f"Generating graph '{name}' from circle: center=({center_lat}, {center_lng}), radius={radius_miles}mi")
-
-        G = ox.graph_from_polygon(
-            circle,
-            network_type='drive',
+        # Convert radius in miles to meters for graph_from_point (1 mile = 1609.344 meters)
+        dist_meters = radius_miles * 1609.344
+        center_point = (center_lat, center_lng)
+        
+        G = ox.graph_from_point(
+            center_point,
+            dist=dist_meters,
+            network_type='all',
+            simplify=True,
             custom_filter=custom_filter
         )
 
-        G = self._apply_exclusions(G, exclusion_zones)
-        self._update_edge_names(G)
-        G = self._process_graph(G)
-        G = self._relabel_graph(G)
-        self._add_elevation_data(G)
-
-        os.makedirs(self._graphs_dir, exist_ok=True)
-        file_path = os.path.join(self._graphs_dir, f"{name}.gpickle")
-        with open(file_path, 'wb') as f:
-            pickle.dump(G, f, pickle.HIGHEST_PROTOCOL)
-
-        # Save boundary metadata
-        self._save_boundary(name, {
+        boundary_metadata = {
             'type': 'circle',
             'center': [center_lat, center_lng],
             'radius_miles': radius_miles
-        }, exclusion_zones)
-
-        print(f"Graph saved at: {file_path}")
-        return name
+        }
+        return self._finalize_and_save_graph(G, name, boundary_metadata, exclusion_zones)
 
     @staticmethod
     def _add_elevation_data(G):

@@ -57,13 +57,12 @@ function ControlPanel({
     setShowCentroids,
     showGraphBoundary,
     setShowGraphBoundary,
-    // Exclusion props
-    exclusionZones,
-    setExclusionZones,
     isDrawingExclusion,
     setIsDrawingExclusion,
     primaryColor,
-    setPrimaryColor
+    setPrimaryColor,
+    showGraphNodes,
+    setShowGraphNodes
 }) {
     const canGoPrev = currentPathIndex > 0;
     const canGoNext = currentPathIndex < filteredPathsCount - 1;
@@ -182,12 +181,12 @@ function ControlPanel({
                                 setGraphCreateMode={setGraphCreateMode}
                                 graphBounds={graphBounds}
                                 // Exclusion props
-                                exclusionZones={exclusionZones}
-                                setExclusionZones={setExclusionZones}
                                 isDrawingExclusion={isDrawingExclusion}
                                 setIsDrawingExclusion={setIsDrawingExclusion}
                                 showGraphBoundary={showGraphBoundary}
                                 setShowGraphBoundary={setShowGraphBoundary}
+                                showGraphNodes={showGraphNodes}
+                                setShowGraphNodes={setShowGraphNodes}
                             />
                         </div>
                     )}
@@ -366,6 +365,20 @@ function ControlPanel({
                                                 type="checkbox"
                                                 checked={showPathPreview}
                                                 onChange={(e) => setShowPathPreview(e.target.checked)}
+                                            />
+                                            <span className="slider round"></span>
+                                        </label>
+                                    </div>
+
+                                    <div className="control-panel__setting-row">
+                                        <label className="control-panel__setting-label">
+                                            Show Graph Nodes
+                                        </label>
+                                        <label className="switch">
+                                            <input
+                                                type="checkbox"
+                                                checked={showGraphNodes}
+                                                onChange={(e) => setShowGraphNodes(e.target.checked)}
                                             />
                                             <span className="slider round"></span>
                                         </label>

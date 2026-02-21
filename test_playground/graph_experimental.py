@@ -925,7 +925,7 @@ if __name__ == "__main__":
     # graph_name = "avl_1"
     # graph_name = "Vilas_process_test"
     # graph_name = "Vilas_1600"
-    graph_name = "vilas_1600"
+    graph_name = "aa"
     saved_path = f"graphs/{graph_name}.gpickle" 
     
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -974,7 +974,7 @@ if __name__ == "__main__":
         # ox.plot_graph(G)
         
         # Run the iterative cleaning process
-        G = process_graph(G)
+        # G = process_graph(G)
 
         print(f"Final Graph has {len(G.nodes)} nodes and {len(G.edges)} edges.")
         
@@ -983,7 +983,7 @@ if __name__ == "__main__":
         # important_nodes = get_nodes_with_edge_attribute_values(G, 'highway', highway_types)
         # print(f"Number of nodes on primary/secondary/tertiary roads: {len(important_nodes)}")
 
-        ox.plot_graph(G)
+        ox.plot_graph_routes(G, [[171], [173]])
         # 8. Plot
         # try:
         #     plot_graph_colored_by_attribute(G, 'name')

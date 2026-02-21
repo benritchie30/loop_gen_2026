@@ -64,6 +64,8 @@ function App() {
   const [showPathPreview, setShowPathPreview] = useState(false);
   const [pathPreviewOpacity, setPathPreviewOpacity] = useState(0.5);
   const [showGraphBoundary, setShowGraphBoundary] = useState(false);
+  const [showGraphNodes, setShowGraphNodes] = useState(false);
+  const [graphNodes, setGraphNodes] = useState([]);
   const [exclusionZones, setExclusionZones] = useState([]);
   const [isDrawingExclusion, setIsDrawingExclusion] = useState(false);
 
@@ -201,6 +203,10 @@ function App() {
           alert(`Graph creation failed: ${message.error}`);
           break;
 
+        case 'GRAPH_NODES':
+          setGraphNodes(message.nodes || []);
+          break;
+
         default:
           console.log('[App] Unknown message type:', message.type);
       }
@@ -246,6 +252,7 @@ function App() {
   // Graph management handlers
   const handleSwitchGraph = useCallback((name) => {
     sendMessage('SWITCH_GRAPH', { name });
+    setGraphNodes([]); // Clear nodes when switching graphs
   }, [sendMessage]);
 
   const handleStartGraphCreate = useCallback(() => {
@@ -445,6 +452,13 @@ function App() {
     localStorage.setItem('primaryColor', primaryColor);
   }, [primaryColor]);
 
+  // Fetch graph nodes when the toggle is turned on
+  useEffect(() => {
+    if (showGraphNodes && activeGraph && graphNodes.length === 0) {
+      sendMessage('GET_GRAPH_NODES', {});
+    }
+  }, [showGraphNodes, activeGraph, graphNodes.length, sendMessage]);
+
   // Reset graph bounds when switching between box/polygon mode
   useEffect(() => {
     if (mode === 'graphCreate') {
@@ -482,6 +496,8 @@ function App() {
         showPathPreview={showPathPreview}
         pathPreviewOpacity={pathPreviewOpacity}
         showGraphBoundary={showGraphBoundary}
+        showGraphNodes={showGraphNodes}
+        graphNodes={graphNodes}
 
         // Exclusion / Drawing props
         exclusionZones={exclusionZones}
@@ -542,6 +558,8 @@ function App() {
         setShowCentroids={setShowCentroids}
         showGraphBoundary={showGraphBoundary}
         setShowGraphBoundary={setShowGraphBoundary}
+        showGraphNodes={showGraphNodes}
+        setShowGraphNodes={setShowGraphNodes}
 
         primaryColor={primaryColor}
         setPrimaryColor={setPrimaryColor}

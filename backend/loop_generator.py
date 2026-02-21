@@ -12,7 +12,7 @@ import functools
 # Constants
 MILES_PER_METER = 0.000621371
 FEET_PER_METER = 3.28084
-MIN_LOOP_LENGTH_METERS = 500  # Minimum loop length to be considered valid
+MIN_LOOP_LENGTH_METERS = 1000  # Minimum loop length to be considered valid
 
 # Initialize SRTM downloader
 _srtm_data = None
@@ -138,8 +138,12 @@ def weight_function_turns_dist(G, u_node, v, current_turns, current_dist):
     # Handle potentially missing edge data gracefully
     if not G.has_edge(u_node.id, v):
         return float('inf'), float('inf')
-
-    curr_edge = G[u_node.id][v][0]
+    try:
+        curr_edge = G[u_node.id][v][0]
+    except KeyError:
+        print("KeyError in weight_function_turns_dist")
+        print(u_node.id, v)
+        return current_turns, current_dist
     
     if u_node.prev is None:
         return 0, current_dist + curr_edge.get('length', 0)
@@ -417,12 +421,18 @@ def find_paths_turns_dist(
     # print(f"Starting loop detection... range {min_path_length}-{max_path_length}m")
     
     iters = 0
-    MAX_ITERS = 500000
+    MAX_ITERS = 1000000
+    # MAX_ITERS = 100000000
     while queue:
         iters += 1
         if iters > MAX_ITERS:
             print(f"Max iterations {MAX_ITERS} reached. Stopping.")
+            print(f"Current queue size: {len(queue)}")
             break
+
+        if iters % 100 == 0:
+            print(f"Iter {iters}: Queue size {len(queue)}")
+
             
         (turns, dist, _), curr_node, visited_mask = heapq.heappop(queue)
         
